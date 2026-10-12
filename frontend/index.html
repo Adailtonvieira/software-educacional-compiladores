@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Software Educacional de Compiladores</title>
+</head>
+<body>
+    <h1>Hello, World!</h1>
+    <p id="resposta">Carregando...</p>
+
+    <script>
+        fetch('http://localhost:5000/api/hello')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('resposta').textContent = data.message;
+            })
+            .catch(() => {
+                document.getElementById('resposta').textContent = 'Erro ao conectar ao backend';
+            });
+    </script>
+</body>
+</html>
