@@ -32,10 +32,10 @@ Além disso, a escolha de Python alinha-se ao público-alvo (graduandos em Ciên
 
 Para tornar o projeto viável dentro do prazo da disciplina, foi delimitado um **subconjunto inicial** da linguagem Python. Não se pretende cobrir a linguagem inteira, mas sim as construções mais fundamentais:
 
-- **Declaração de variáveis** — ex: `x = 10`
-- **Operadores aritméticos** — `+`, `-`, `*`, `/`
-- **Estruturas condicionais simples** — `if` / `else`
-- **Expressões de comparação** — `==`, `!=`, `<`, `>`
+- **Declaração de variáveis** 
+- **Operadores aritméticos** 
+- **Estruturas condicionais simples** 
+- **Expressões de comparação**
 
 Novas construções serão incorporadas gradativamente nas etapas seguintes do projeto, conforme a evolução do software.
 
