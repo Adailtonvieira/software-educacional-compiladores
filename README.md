@@ -10,7 +10,7 @@ O software adota uma abordagem **web interativa**, permitindo que os alunos visu
 
 ## Linguagem Foco
 
-**Python** — escolhida pela simplicidade sintática e ampla adoção acadêmica.
+**Python** - escolhida pela simplicidade sintática e ampla adoção acadêmica.
 
 ---
 
@@ -18,11 +18,11 @@ O software adota uma abordagem **web interativa**, permitindo que os alunos visu
 
 A escolha do Python como linguagem foco do software educacional baseia-se em três razões principais:
 
-1. **Simplicidade sintática** — Python possui uma gramática limpa e legível, o que permite que o estudante concentre seus esforços na compreensão dos conceitos de compilação (análise léxica, sintática e semântica) sem se dispersar com complexidades sintáticas da própria linguagem.
+1. **Simplicidade sintática** - Python possui uma gramática limpa e legível, o que permite que o estudante concentre seus esforços na compreensão dos conceitos de compilação (análise léxica, sintática e semântica) sem se dispersar com complexidades sintáticas da própria linguagem.
 
-2. **Disponibilidade de bibliotecas de referência** — Ferramentas como PLY e Lark oferecem implementações de analisadores que podem servir como base de comparação e inspiração para o desenvolvimento do software.
+2. **Disponibilidade de bibliotecas de referência** - Ferramentas como PLY e Lark oferecem implementações de analisadores que podem servir como base de comparação e inspiração para o desenvolvimento do software.
 
-3. **Ampla adoção acadêmica** — Python é a linguagem introdutória mais utilizada em cursos de Ciência da Computação no Brasil, o que facilita a adoção do software por alunos e professores.
+3. **Ampla adoção acadêmica** - Python é a linguagem introdutória mais utilizada em cursos de Ciência da Computação no Brasil, o que facilita a adoção do software por alunos e professores.
 
 Além disso, a escolha de Python alinha-se ao público-alvo (graduandos em Ciência da Computação), que tipicamente já possui familiaridade com a linguagem.
 
