@@ -83,3 +83,6 @@ Para instalar o WSL e o Ubuntu, execute no **PowerShell como Administrador**:
 
 ```powershell
 wsl --install -d Ubuntu
+
+<img width="1551" height="1049" alt="image" src="https://github.com/user-attachments/assets/c2497144-7065-4ff5-8e7e-76e952e08b85" />
+
