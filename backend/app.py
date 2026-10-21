@@ -22,7 +22,7 @@ def analisar_codigo():
 
     # Simula o recebimento (as análises reais virão nas próximas etapas)
     return jsonify({
-        "mensagem": "Código recebido e validado com sucesso pelo backend!",
+        "mensagem": "Código recebido e validado com sucesso!",
         "recebido": codigo
     }), 200
 
