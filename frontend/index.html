@@ -2,21 +2,100 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Software Educacional de Compiladores</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador Educacional - Python</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .subtitle { color: #666; margin-bottom: 20px; }
+        .controls { margin-bottom: 15px; display: flex; gap: 10px; align-items: center; }
+        select, button { padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; }
+        button { background-color: #0056b3; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #004494; }
+        textarea { width: 100%; height: 200px; font-family: 'Courier New', Courier, monospace; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px; resize: vertical; }
+        .result-area { margin-top: 20px; padding: 15px; border-radius: 4px; background-color: #e9ecef; border-left: 5px solid #0056b3; min-height: 50px; }
+        .error { background-color: #f8d7da; border-left-color: #dc3545; color: #721c24; }
+        .success { background-color: #d4edda; border-left-color: #28a745; color: #155724; }
+    </style>
 </head>
 <body>
-    <h1>Hello, World!</h1>
-    <p id="resposta">Carregando...</p>
+    <div class="container">
+        <h1>Analisador Educacional</h1>
+        <div class="subtitle"><strong>Linguagem:</strong> Python (Subconjunto Inicial)</div>
+
+        <div class="controls">
+            <select id="exemplos">
+                <option value="">-- Selecione um exemplo --</option>
+                <option value="ex1">Exemplo 1: Declaração de variável</option>
+                <option value="ex2">Exemplo 2: Operação aritmética</option>
+                <option value="ex3">Exemplo 3: Estrutura condicional</option>
+            </select>
+            <button id="btnAnalisar">Solicitar Análise</button>
+        </div>
+
+        <textarea id="codigo" placeholder="Digite ou cole seu código Python aqui..."></textarea>
+
+        <div id="resultado" class="result-area">
+            Os resultados da análise aparecerão aqui.
+        </div>
+    </div>
 
     <script>
-        fetch('http://localhost:5000/api/hello')
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('resposta').textContent = data.message;
-            })
-            .catch(() => {
-                document.getElementById('resposta').textContent = 'Erro ao conectar ao backend';
-            });
+        const exemplos = {
+            ex1: "x = 10",
+            ex2: "resultado = 10 + 5",
+            ex3: "if x > 0:\n    y = x + 1"
+        };
+
+        const selectExemplos = document.getElementById('exemplos');
+        const txtCodigo = document.getElementById('codigo');
+        const btnAnalisar = document.getElementById('btnAnalisar');
+        const divResultado = document.getElementById('resultado');
+
+        // Carregar exemplo selecionado
+        selectExemplos.addEventListener('change', (e) => {
+            const selected = e.target.value;
+            if (selected && exemplos[selected]) {
+                txtCodigo.value = exemplos[selected];
+            }
+        });
+
+        // Enviar para o backend
+        btnAnalisar.addEventListener('click', async () => {
+            const codigo = txtCodigo.value;
+            
+            divResultado.className = 'result-area';
+            divResultado.innerHTML = 'Processando...';
+
+            // Validação no frontend
+            if (!codigo || codigo.trim() === '') {
+                divResultado.className = 'result-area error';
+                divResultado.innerHTML = '<strong>Erro:</strong> Informe um código-fonte antes de solicitar a análise.';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/api/analisar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigo: codigo })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    divResultado.className = 'result-area success';
+                    divResultado.innerHTML = `<strong>Sucesso:</strong> ${data.mensagem}<br><br><strong>Código Recebido:</strong><br><pre>${data.recebido}</pre>`;
+                } else {
+                    divResultado.className = 'result-area error';
+                    divResultado.innerHTML = `<strong>Erro:</strong> ${data.erro || 'Erro desconhecido no servidor.'}`;
+                }
+            } catch (error) {
+                divResultado.className = 'result-area error';
+                divResultado.innerHTML = '<strong>Falha de Comunicação:</strong> Não foi possível comunicar com o servidor. Verifique a conexão e tente novamente.';
+            }
+        });
     </script>
 </body>
 </html>
