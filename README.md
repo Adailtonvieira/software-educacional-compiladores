@@ -84,6 +84,21 @@ Para instalar o WSL e o Ubuntu, execute no **PowerShell como Administrador**:
 ```powershell
 wsl --install -d Ubuntu
 
+## Funcionalidades da Etapa 2
+- Interface web com área de texto para código em Python.
+- Seleção de 3 exemplos pré-definidos (variável, operação aritmética, condicional).
+- Botão para solicitar a análise.
+- Validação de entradas vazias ou contendo apenas espaços (no frontend e no backend).
+- Comunicação via API REST (JSON) entre o frontend e o backend.
 
+## Exemplos Disponíveis
+1. **Exemplo 1 (Declaração):** `x = 10`
+2. **Exemplo 2 (Aritmética):** `resultado = 10 + 5`
+3. **Exemplo 3 (Condicional):** `if x > 0:\n    y = x + 1`
+
+## Como Executar os Testes
+Para rodar os testes do backend, execute:
+```bash
+docker compose exec backend pytest tests/
 
 
