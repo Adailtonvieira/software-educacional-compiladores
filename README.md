@@ -101,4 +101,10 @@ Para rodar os testes do backend, execute:
 ```bash
 docker compose exec backend pytest tests/
 
+## Como Executar os Testes Automatizados
+Para rodar os testes do backend no Docker, utilize o comando:
+\`\`\`bash
+docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
+\`\`\`
+
 
