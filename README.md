@@ -107,3 +107,53 @@ wsl --install -d Ubuntu
 Para rodar os testes no Docker, utilize o comando:
 ```bash
 docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
+
+## Contrato de Comunicação (API)
+
+**Requisição (POST /api/analisar):**
+```json
+{ "codigo": "x = 10" }
+
+
+{
+  "sucesso": true,
+  "tokens": [
+    { "tipo": "IDENTIFICADOR", "lexema": "x", "linha": 1, "coluna": 1 },
+    { "tipo": "OPERADOR", "lexema": "=", "linha": 1, "coluna": 3 },
+    { "tipo": "LITERAL_INTEIRO", "lexema": "10", "linha": 1, "coluna": 5 }
+  ],
+  "erros": []
+}
+
+{
+  "sucesso": false,
+  "tokens": [],
+  "erros": [
+    { "tipo": "ERRO_LEXICO", "lexema": "@", "linha": 1, "coluna": 5, "mensagem": "Caractere não reconhecido: '@'" }
+  ]
+}
+
+
+#### 3. Registro dos Testes (Item 6 e 9)
+O professor exige um registro em `docs/` mostrando que você executou os testes.
+**Como resolver:** 
+1. No seu GitHub, vá na pasta `docs`.
+2. Clique em "Add file" -> "Create new file".
+3. Nomeie como `registro_testes.md`.
+4. Cole o seguinte texto:
+
+```markdown
+# Registro de Testes - Etapa 3
+
+## Testes Unitários do Scanner
+- **Comando:** `docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v`
+- **Resultado:** 4 testes passaram com sucesso (Tokens básicos, Palavras Reservadas, Erro Léxico, Requisição Vazia).
+- **Falhas encontradas:** Nenhuma falha na execução final.
+
+## Testes de Regressão (Etapas 1 e 2)
+- O ambiente Docker subiu corretamente.
+- A comunicação frontend-backend continua funcionando.
+- A interface não quebrou ao inserir entradas inválidas.
+
+## Limitações Conhecidas
+- O sistema realiza apenas a Análise Léxica (Scanner). A Análise Sintática (Parser) e a Análise Semântica serão implementadas nas próximas etapas.
