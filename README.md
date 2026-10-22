@@ -84,26 +84,12 @@ Para instalar o WSL e o Ubuntu, execute no **PowerShell como Administrador**:
 ```powershell
 wsl --install -d Ubuntu
 
-## Funcionalidades da Etapa 2
-- Interface web com área de texto para código em Python.
-- Seleção de 3 exemplos pré-definidos (variável, operação aritmética, condicional).
-- Botão para solicitar a análise.
-- Validação de entradas vazias ou contendo apenas espaços (no frontend e no backend).
-- Comunicação via API REST (JSON) entre o frontend e o backend.
+## Funcionalidades da Etapa 3 (Análise Léxica)
 
-## Exemplos Disponíveis
-1. **Exemplo 1 (Declaração):** `x = 10`
-2. **Exemplo 2 (Aritmética):** `resultado = 10 + 5`
-3. **Exemplo 3 (Condicional):** `if x > 0:\n    y = x + 1`
-
-## Como Executar os Testes
-Para rodar os testes do backend, execute:
-```bash
-docker compose exec backend pytest tests/
-
-## Como Executar os Testes Automatizados
-Para rodar os testes do backend no Docker, utilize o comando:
-\`\`\`bash
+- Scanner implementado em Python para o subconjunto da linguagem.
+- Identificação de Palavras Reservadas, Identificadores, Literais, Operadores e Delimitadores.
+- Detecção de erros léxicos com indicação de linha e coluna.
+- Tabela interativa no frontend exibindo os tokens.
 
 ## Escopo Léxico (Subconjunto de Python)
 
@@ -114,9 +100,10 @@ Para rodar os testes do backend no Docker, utilize o comando:
 | **Literais** | `10`, `3.14`, `"texto"`, `'a'` |
 | **Operadores** | `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `>`, `<` |
 | **Delimitadores** | `(`, `)`, `[`, `]`, `:`, `,` |
-| **Comentários** | `# linha` (ignorados pelo scanner) |
-| **Espaços em branco** | Espaços e quebras de linha (ignorados) |
+| **Comentários** | `# linha` (ignorados) |
+
+## Como Executar os Testes Automatizados
+
+Para rodar os testes no Docker, utilize o comando:
+```bash
 docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
-\`\`\`
-
-
