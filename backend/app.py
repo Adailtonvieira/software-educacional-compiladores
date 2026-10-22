@@ -1,29 +1,81 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import re
 
 app = Flask(__name__)
 CORS(app)
 
+# Definição dos padrões de Tokens para o Scanner
+TOKEN_TYPES = [
+    ('PALAVRA_RESERVADA', r'\b(if|else|while|for|def|return|True|False)\b'),
+    ('IDENTIFICADOR', r'\b[a-zA-Z_][a-zA-Z0-9_]*\b'),
+    ('LITERAL_REAL', r'\b\d+\.\d+\b'),
+    ('LITERAL_INTEIRO', r'\b\d+\b'),
+    ('LITERAL_STRING', r'"[^"]*"|\'[^\']*\''),
+    ('OPERADOR', r'==|!=|<=|>=|[+\-*/=<>]'),
+    ('DELIMITADOR', r'[()\[\]:,]'),
+    ('COMENTARIO', r'#[^\n]*'),
+    ('ESPACO', r'[ \t\n]+'),
+    ('ERRO', r'.') # Qualquer outra coisa é erro
+]
+
+def analisar_lexico(codigo):
+    tokens = []
+    erros = []
+    linha = 1
+    coluna = 1
+    
+    regex_master = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in TOKEN_TYPES)
+    
+    for match in re.finditer(regex_master, codigo):
+        tipo = match.lastgroup
+        lexema = match.group()
+        
+        if tipo == 'ESPACO' or tipo == 'COMENTARIO':
+            pass # Ignora espaços e comentários
+        elif tipo == 'ERRO':
+            erros.append({
+                "tipo": "ERRO_LEXICO",
+                "lexema": lexema,
+                "linha": linha,
+                "coluna": coluna,
+                "mensagem": f"Caractere não reconhecido: '{lexema}'"
+            })
+        else:
+            tokens.append({
+                "tipo": tipo,
+                "lexema": lexema,
+                "linha": linha,
+                "coluna": coluna
+            })
+            
+        quebras = lexema.count('\n')
+        if quebras > 0:
+            linha += quebras
+            coluna = len(lexema.split('\n')[-1]) + 1
+        else:
+            coluna += len(lexema)
+            
+    return tokens, erros
+
 @app.route('/api/analisar', methods=['POST'])
 def analisar_codigo():
-    # Verifica se a requisição tem JSON
     if not request.is_json:
-        return jsonify({"erro": "Formato de requisição inválido. Esperado JSON."}), 400
+        return jsonify({"erro": "Formato inválido."}), 400
 
     dados = request.get_json()
     codigo = dados.get('codigo', '')
 
-    # Validação do backend (não confiar apenas no frontend)
-    if not codigo or not isinstance(codigo, str):
-        return jsonify({"erro": "O campo 'codigo' é obrigatório e deve ser texto."}), 400
-        
-    if codigo.strip() == '':
-        return jsonify({"erro": "O código não pode conter apenas espaços em branco."}), 400
+    if not codigo or codigo.strip() == '':
+        return jsonify({"erro": "O código não pode estar vazio."}), 400
 
-    # Simula o recebimento (as análises reais virão nas próximas etapas)
+    tokens, erros = analisar_lexico(codigo)
+    sucesso = len(erros) == 0
+
     return jsonify({
-        "mensagem": "Código recebido e validado com sucesso!",
-        "recebido": codigo
+        "sucesso": sucesso,
+        "tokens": tokens,
+        "erros": erros
     }), 200
 
 if __name__ == '__main__':
