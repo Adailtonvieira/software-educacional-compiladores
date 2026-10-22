@@ -5,73 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analisador Educacional - Python</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
         .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        .subtitle { color: #666; margin-bottom: 20px; }
-        .controls { margin-bottom: 15px; display: flex; gap: 10px; align-items: center; }
-        select, button { padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; }
-        button { background-color: #0056b3; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #004494; }
-        textarea { width: 100%; height: 200px; font-family: 'Courier New', Courier, monospace; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px; resize: vertical; }
-        .result-area { margin-top: 20px; padding: 15px; border-radius: 4px; background-color: #e9ecef; border-left: 5px solid #0056b3; min-height: 50px; }
-        .error { background-color: #f8d7da; border-left-color: #dc3545; color: #721c24; }
-        .success { background-color: #d4edda; border-left-color: #28a745; color: #155724; }
+        textarea { width: 100%; height: 150px; font-family: monospace; padding: 10px; box-sizing: border-box; margin-bottom: 10px; }
+        .controls { margin-bottom: 10px; display: flex; gap: 10px; }
+        button { padding: 10px 15px; background: #0056b3; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #004494; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .error-box { background-color: #f8d7da; color: #721c24; padding: 10px; margin-top: 20px; border-radius: 4px; }
+        .success-box { background-color: #d4edda; color: #155724; padding: 10px; margin-top: 20px; border-radius: 4px; }
+        #resultados { margin-top: 20px; display: none; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Analisador Educacional</h1>
-        <div class="subtitle"><strong>Linguagem:</strong> Python (Subconjunto Inicial)</div>
-
+        <h1>Analisador Léxico (Scanner)</h1>
         <div class="controls">
             <select id="exemplos">
-                <option value="">-- Selecione um exemplo --</option>
-                <option value="ex1">Exemplo 1: Declaração de variável</option>
-                <option value="ex2">Exemplo 2: Operação aritmética</option>
-                <option value="ex3">Exemplo 3: Estrutura condicional</option>
+                <option value="">-- Exemplos --</option>
+                <option value="x = 10">Variável</option>
+                <option value="if x > 0:\n    y = 1">Condicional</option>
+                <option value="def soma(a, b):\n    return a + b">Função</option>
+                <option value="x = @">Erro Léxico</option>
             </select>
-            <button id="btnAnalisar">Solicitar Análise</button>
+            <button id="btnAnalisar">Analisar Código</button>
         </div>
-
-        <textarea id="codigo" placeholder="Digite ou cole seu código Python aqui..."></textarea>
-
-        <div id="resultado" class="result-area">
-            Os resultados da análise aparecerão aqui.
+        
+        <textarea id="codigo" placeholder="Digite o código Python aqui..."></textarea>
+        
+        <div id="resultados">
+            <div id="mensagens"></div>
+            <h3>Tabela de Tokens</h3>
+            <table id="tabela-tokens">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Lexema</th>
+                        <th>Linha</th>
+                        <th>Coluna</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 
     <script>
-        const exemplos = {
-            ex1: "x = 10",
-            ex2: "resultado = 10 + 5",
-            ex3: "if x > 0:\n    y = x + 1"
-        };
-
-        const selectExemplos = document.getElementById('exemplos');
-        const txtCodigo = document.getElementById('codigo');
-        const btnAnalisar = document.getElementById('btnAnalisar');
-        const divResultado = document.getElementById('resultado');
-
-        // Carregar exemplo selecionado
-        selectExemplos.addEventListener('change', (e) => {
-            const selected = e.target.value;
-            if (selected && exemplos[selected]) {
-                txtCodigo.value = exemplos[selected];
-            }
+        document.getElementById('exemplos').addEventListener('change', (e) => {
+            document.getElementById('codigo').value = e.target.value;
         });
 
-        // Enviar para o backend
-        btnAnalisar.addEventListener('click', async () => {
-            const codigo = txtCodigo.value;
-            
-            divResultado.className = 'result-area';
-            divResultado.innerHTML = 'Processando...';
+        document.getElementById('btnAnalisar').addEventListener('click', async () => {
+            const codigo = document.getElementById('codigo').value;
+            const divResultados = document.getElementById('resultados');
+            const divMensagens = document.getElementById('mensagens');
+            const tbody = document.querySelector('#tabela-tokens tbody');
 
-            // Validação no frontend
-            if (!codigo || codigo.trim() === '') {
-                divResultado.className = 'result-area error';
-                divResultado.innerHTML = '<strong>Erro:</strong> Informe um código-fonte antes de solicitar a análise.';
+            if (!codigo.trim()) {
+                alert("Por favor, insira um código.");
                 return;
             }
 
@@ -79,21 +72,28 @@
                 const response = await fetch('http://localhost:5000/api/analisar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ codigo: codigo })
+                    body: JSON.stringify({ codigo })
+                });
+                
+                const data = await response.json();
+                divResultados.style.display = 'block';
+                tbody.innerHTML = ''; 
+
+                if (!data.sucesso) {
+                    const mensagensErro = data.erros.map(e => `${e.mensagem} (Linha ${e.linha}, Col ${e.coluna})`).join('<br>');
+                    divMensagens.innerHTML = `<div class="error-box"><strong>Erros Léxicos Encontrados:</strong><br>${mensagensErro}</div>`;
+                } else {
+                    divMensagens.innerHTML = `<div class="success-box">Análise concluída com sucesso! ${data.tokens.length} tokens encontrados.</div>`;
+                }
+
+                data.tokens.forEach(token => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${token.tipo}</td><td><code>${token.lexema}</code></td><td>${token.linha}</td><td>${token.coluna}</td>`;
+                    tbody.appendChild(tr);
                 });
 
-                const data = await response.json();
-
-                if (response.ok) {
-                    divResultado.className = 'result-area success';
-                    divResultado.innerHTML = `<strong>Sucesso:</strong> ${data.mensagem}<br><br><strong>Código Recebido:</strong><br><pre>${data.recebido}</pre>`;
-                } else {
-                    divResultado.className = 'result-area error';
-                    divResultado.innerHTML = `<strong>Erro:</strong> ${data.erro || 'Erro desconhecido no servidor.'}`;
-                }
             } catch (error) {
-                divResultado.className = 'result-area error';
-                divResultado.innerHTML = '<strong>Falha de Comunicação:</strong> Não foi possível comunicar com o servidor. Verifique a conexão e tente novamente.';
+                alert("Erro de comunicação com o servidor.");
             }
         });
     </script>
