@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analisador Educacional - Python</title>
+    <title>Analisador Léxico - Python</title>
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
         .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
@@ -26,8 +26,10 @@
             <select id="exemplos">
                 <option value="">-- Exemplos --</option>
                 <option value="x = 10">Variável</option>
-                <option value="if x > 0:\n    y = 1">Condicional</option>
-                <option value="def soma(a, b):\n    return a + b">Função</option>
+                <option value="if x > 0:
+    y = 1">Condicional</option>
+                <option value="def soma(a, b):
+    return a + b">Função</option>
                 <option value="x = @">Erro Léxico</option>
             </select>
             <button id="btnAnalisar">Analisar Código</button>
