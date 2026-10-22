@@ -104,6 +104,18 @@ docker compose exec backend pytest tests/
 ## Como Executar os Testes Automatizados
 Para rodar os testes do backend no Docker, utilize o comando:
 \`\`\`bash
+
+## Escopo Léxico (Subconjunto de Python)
+
+| Categoria | Exemplos |
+| :--- | :--- |
+| **Palavras reservadas** | `if`, `else`, `while`, `for`, `def`, `return`, `True`, `False` |
+| **Identificadores** | `x`, `numero`, `_variavel`, `contador1` |
+| **Literais** | `10`, `3.14`, `"texto"`, `'a'` |
+| **Operadores** | `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `>`, `<` |
+| **Delimitadores** | `(`, `)`, `[`, `]`, `:`, `,` |
+| **Comentários** | `# linha` (ignorados pelo scanner) |
+| **Espaços em branco** | Espaços e quebras de linha (ignorados) |
 docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
 \`\`\`
 
