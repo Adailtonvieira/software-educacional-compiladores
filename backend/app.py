@@ -5,7 +5,6 @@ import re
 app = Flask(__name__)
 CORS(app)
 
-# Definição dos padrões de Tokens para o Scanner
 TOKEN_TYPES = [
     ('PALAVRA_RESERVADA', r'\b(if|else|while|for|def|return|True|False)\b'),
     ('IDENTIFICADOR', r'\b[a-zA-Z_][a-zA-Z0-9_]*\b'),
@@ -16,7 +15,7 @@ TOKEN_TYPES = [
     ('DELIMITADOR', r'[()\[\]:,]'),
     ('COMENTARIO', r'#[^\n]*'),
     ('ESPACO', r'[ \t\n]+'),
-    ('ERRO', r'.') # Qualquer outra coisa é erro
+    ('ERRO', r'.')
 ]
 
 def analisar_lexico(codigo):
@@ -24,15 +23,12 @@ def analisar_lexico(codigo):
     erros = []
     linha = 1
     coluna = 1
-    
     regex_master = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in TOKEN_TYPES)
-    
     for match in re.finditer(regex_master, codigo):
         tipo = match.lastgroup
         lexema = match.group()
-        
         if tipo == 'ESPACO' or tipo == 'COMENTARIO':
-            pass # Ignora espaços e comentários
+            pass
         elif tipo == 'ERRO':
             erros.append({
                 "tipo": "ERRO_LEXICO",
@@ -48,30 +44,24 @@ def analisar_lexico(codigo):
                 "linha": linha,
                 "coluna": coluna
             })
-            
         quebras = lexema.count('\n')
         if quebras > 0:
             linha += quebras
             coluna = len(lexema.split('\n')[-1]) + 1
         else:
             coluna += len(lexema)
-            
     return tokens, erros
 
 @app.route('/api/analisar', methods=['POST'])
 def analisar_codigo():
     if not request.is_json:
         return jsonify({"erro": "Formato inválido."}), 400
-
     dados = request.get_json()
     codigo = dados.get('codigo', '')
-
     if not codigo or codigo.strip() == '':
         return jsonify({"erro": "O código não pode estar vazio."}), 400
-
     tokens, erros = analisar_lexico(codigo)
     sucesso = len(erros) == 0
-
     return jsonify({
         "sucesso": sucesso,
         "tokens": tokens,
