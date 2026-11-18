@@ -1,103 +1,460 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analisador Léxico - Python</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
-        .container { max-width: 1000px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        textarea { width: 100%; height: 150px; font-family: monospace; padding: 10px; box-sizing: border-box; margin-bottom: 10px; }
-        .controls { margin-bottom: 10px; display: flex; gap: 10px; }
-        button { padding: 10px 15px; background: #0056b3; color: white; border: none; cursor: pointer; border-radius: 4px; }
-        button:hover { background: #004494; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .error-box { background-color: #f8d7da; color: #721c24; padding: 10px; margin-top: 20px; border-radius: 4px; }
-        .success-box { background-color: #d4edda; color: #155724; padding: 10px; margin-top: 20px; border-radius: 4px; }
-        #resultados { margin-top: 20px; display: none; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analisador Léxico e Sintático - Python (subconjunto)</title>
+<style>
+  :root {
+    --fundo: #f4f4f9; --cartao: #ffffff; --texto: #1d1d1f; --suave: #555;
+    --borda: #c9c9d1; --primaria: #0b4fa3; --primaria-escura: #083b7a;
+    --ok-fundo: #d4edda; --ok-texto: #0f5132; --erro-fundo: #f8d7da; --erro-texto: #842029;
+    --aviso-fundo: #fff3cd; --aviso-texto: #664d03; --destaque: #ffe58f;
+    --fonte-base: 16px;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: var(--fonte-base); }
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 16px; background: var(--fundo); color: var(--texto); line-height: 1.45; }
+  .container { max-width: 1200px; margin: auto; }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 0 0 8px; }
+  .subtitulo { color: var(--suave); margin: 0; font-size: .95rem; }
+  .cartao { background: var(--cartao); border: 1px solid var(--borda); border-radius: 8px; padding: 16px; margin-top: 16px; }
+  .grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .grade { grid-template-columns: minmax(0, 1fr); } }
+  label { font-weight: bold; display: block; margin-bottom: 4px; }
+  textarea { width: 100%; height: 260px; font-family: Consolas, "Courier New", monospace; font-size: 1rem; padding: 10px; border: 1px solid var(--borda); border-radius: 6px; resize: vertical; tab-size: 4; }
+  select, button { font-size: 1rem; padding: 9px 12px; border-radius: 6px; }
+  select { border: 1px solid var(--borda); background: #fff; max-width: 100%; }
+  button { background: var(--primaria); color: #fff; border: none; cursor: pointer; min-height: 44px; }
+  button:hover { background: var(--primaria-escura); }
+  button.secundario { background: #e7e9ef; color: var(--texto); border: 1px solid var(--borda); }
+  button.secundario:hover { background: #d9dce5; }
+  button[aria-pressed="true"] { outline: 2px solid var(--primaria); }
+  :focus-visible { outline: 3px solid #f0a500; outline-offset: 2px; }
+  .controles { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; align-items: center; }
+  .contador { color: var(--suave); font-size: .85rem; }
+  .contador.excedido { color: var(--erro-texto); font-weight: bold; }
+  .etapas { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0; }
+  .etapa { padding: 6px 10px; border-radius: 16px; font-size: .9rem; border: 1px solid var(--borda); background: #eee; }
+  .etapa.ok { background: var(--ok-fundo); color: var(--ok-texto); border-color: #a3cfbb; }
+  .etapa.erro { background: var(--erro-fundo); color: var(--erro-texto); border-color: #f1aeb5; }
+  .etapa.pendente { background: var(--aviso-fundo); color: var(--aviso-texto); border-color: #ffe69c; }
+  .caixa { padding: 10px 12px; border-radius: 6px; margin-top: 10px; }
+  .caixa.ok { background: var(--ok-fundo); color: var(--ok-texto); }
+  .caixa.erro { background: var(--erro-fundo); color: var(--erro-texto); }
+  .caixa.aviso { background: var(--aviso-fundo); color: var(--aviso-texto); }
+  .erro-item { margin: 8px 0 0; padding-left: 10px; border-left: 3px solid currentColor; }
+  .erro-item button { background: none; color: inherit; text-decoration: underline; padding: 0; min-height: 0; font-weight: bold; }
+  .dica { font-style: italic; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f0f1f5; position: sticky; top: 0; }
+  tr.destacado td { background: var(--destaque); }
+  .rolagem { max-height: 420px; overflow: auto; }
+  code { font-family: Consolas, "Courier New", monospace; }
+  details.explicacao { margin-bottom: 10px; color: var(--suave); font-size: .92rem; }
+  details.explicacao summary { cursor: pointer; color: var(--primaria); }
+  /* Árvore hierárquica */
+  ul.arvore, ul.arvore ul { list-style: none; margin: 0; padding-left: 18px; }
+  ul.arvore { padding-left: 0; }
+  ul.arvore li { margin: 2px 0; }
+  ul.arvore ul { border-left: 1px dashed #b5b5c3; margin-left: 6px; }
+  .no { display: inline-block; padding: 2px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
+  .no:hover, .no.destacado { background: var(--destaque); border-color: #d4b106; }
+  .no-tipo { font-weight: bold; }
+  .no-valor { font-family: Consolas, monospace; background: #eef2ff; padding: 0 4px; border-radius: 3px; }
+  .no-pos { color: var(--suave); font-size: .8rem; }
+  details.no-det > summary { cursor: pointer; }
+  /* Árvore gráfica */
+  #ast-grafica { overflow: auto; max-height: 520px; border: 1px solid #eee; border-radius: 6px; }
+  #ast-grafica svg text { font-family: Arial, sans-serif; font-size: 12px; }
+  #ast-grafica g.n { cursor: pointer; }
+  #ast-grafica g.n rect { fill: #eef2ff; stroke: #0b4fa3; }
+  #ast-grafica g.n.destacado rect { fill: var(--destaque); stroke: #d4b106; }
+  .oculto { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  footer { margin-top: 16px; color: var(--suave); font-size: .85rem; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>Analisador Léxico (Scanner)</h1>
-        <div class="controls">
-            <select id="exemplos">
-                <option value="">-- Exemplos --</option>
-                <option value="x = 10">Variável</option>
-                <option value="if x > 0:
-    y = 1">Condicional</option>
-                <option value="def soma(a, b):
-    return a + b">Função</option>
-                <option value="x = @">Erro Léxico</option>
-            </select>
-            <button id="btnAnalisar">Analisar Código</button>
-        </div>
-        
-        <textarea id="codigo" placeholder="Digite o código Python aqui..."></textarea>
-        
-        <div id="resultados">
-            <div id="mensagens"></div>
-            <h3>Tabela de Tokens</h3>
-            <table id="tabela-tokens">
-                <thead>
-                    <tr>
-                        <th>Tipo</th>
-                        <th>Lexema</th>
-                        <th>Linha</th>
-                        <th>Coluna</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
+<div class="container">
+  <header>
+    <div>
+      <h1>Analisador Léxico e Sintático</h1>
+      <p class="subtitulo">Software educacional de compiladores — subconjunto de Python (Etapa 4: parser e AST)</p>
     </div>
+    <div class="controles" aria-label="Tamanho da fonte">
+      <button type="button" class="secundario" id="fonteMenor" aria-label="Diminuir fonte">A−</button>
+      <button type="button" class="secundario" id="fonteMaior" aria-label="Aumentar fonte">A+</button>
+    </div>
+  </header>
 
-    <script>
-        document.getElementById('exemplos').addEventListener('change', (e) => {
-            document.getElementById('codigo').value = e.target.value;
-        });
+  <section class="cartao" aria-labelledby="titulo-entrada">
+    <h2 id="titulo-entrada">1. Código-fonte</h2>
+    <details class="explicacao">
+      <summary>O que este analisador aceita?</summary>
+      <p>Atribuições (<code>x = 10</code>), expressões aritméticas (<code>+ - * /</code>, parênteses), comparações
+      (<code>== != &lt; &gt; &lt;= &gt;=</code>), <code>if</code>/<code>else</code>, <code>while</code>,
+      <code>def</code> com parâmetros e <code>return</code>, chamadas de função (<code>print(x)</code>),
+      números inteiros e reais, textos entre aspas, <code>True</code> e <code>False</code> e comentários com <code>#</code>.</p>
+      <p><strong>Ainda não suportado:</strong> <code>for</code>, <code>elif</code>, <code>and</code>/<code>or</code>/<code>not</code>,
+      listas, dicionários, classes, comparações encadeadas (<code>a &lt; b &lt; c</code>), comandos na mesma linha do <code>:</code>
+      e quebra de linha dentro de parênteses. Use espaços para indentar (4 por nível).</p>
+    </details>
+    <div class="controles">
+      <label for="exemplos" class="sr-only">Exemplos</label>
+      <select id="exemplos" aria-label="Carregar exemplo"></select>
+      <button type="button" id="btnAnalisar">Analisar código</button>
+      <span class="contador" id="contador" aria-live="polite"></span>
+    </div>
+    <label for="codigo">Digite ou cole o código (Ctrl+Enter para analisar):</label>
+    <textarea id="codigo" spellcheck="false" placeholder="x = 10&#10;if x > 5:&#10;    print(x)"></textarea>
+  </section>
 
-        document.getElementById('btnAnalisar').addEventListener('click', async () => {
-            const codigo = document.getElementById('codigo').value;
-            const divResultados = document.getElementById('resultados');
-            const divMensagens = document.getElementById('mensagens');
-            const tbody = document.querySelector('#tabela-tokens tbody');
+  <section class="cartao" aria-labelledby="titulo-status" id="secao-status">
+    <h2 id="titulo-status">2. Etapas da compilação</h2>
+    <ul class="etapas" id="etapas" aria-live="polite">
+      <li class="etapa">Léxica: aguardando</li>
+      <li class="etapa">Sintática: aguardando</li>
+      <li class="etapa pendente">Semântica: Etapa 5 (não implementada)</li>
+    </ul>
+    <div id="mensagens" aria-live="assertive"></div>
+  </section>
 
-            if (!codigo.trim()) {
-                alert("Por favor, insira um código.");
-                return;
-            }
+  <div class="grade">
+    <section class="cartao" aria-labelledby="titulo-tokens">
+      <h2 id="titulo-tokens">3. Tokens (análise léxica)</h2>
+      <details class="explicacao">
+        <summary>O que é a análise léxica?</summary>
+        <p>O <em>scanner</em> lê o texto caractere por caractere e o agrupa em <strong>tokens</strong>: cada token tem uma
+        categoria (tipo), o trecho de texto (lexema) e a posição (linha e coluna). Espaços e comentários são descartados.</p>
+      </details>
+      <div class="rolagem">
+        <table id="tabela-tokens">
+          <caption class="sr-only">Tokens identificados</caption>
+          <thead><tr><th scope="col">#</th><th scope="col">Tipo</th><th scope="col">Lexema</th><th scope="col">Linha</th><th scope="col">Coluna</th></tr></thead>
+          <tbody><tr><td colspan="5">Nenhuma análise realizada.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
 
-            try {
-                const response = await fetch('http://localhost:5000/api/analisar', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ codigo })
-                });
-                
-                const data = await response.json();
-                divResultados.style.display = 'block';
-                tbody.innerHTML = ''; 
+    <section class="cartao" aria-labelledby="titulo-ast">
+      <h2 id="titulo-ast">4. Árvore sintática abstrata (AST)</h2>
+      <details class="explicacao">
+        <summary>O que é a análise sintática e a AST?</summary>
+        <p>O <em>parser</em> verifica se a sequência de tokens segue a gramática da linguagem e monta a <strong>AST</strong>:
+        uma árvore em que cada nó é uma construção do programa (atribuição, operação, if...). A precedência aparece na forma
+        da árvore: em <code>1 + 2 * 3</code>, a multiplicação fica mais funda porque é calculada antes. Parênteses guiam a
+        montagem da árvore, mas não viram nós.</p>
+        <p>Clique em um nó para destacar o token correspondente e a posição no código.</p>
+      </details>
+      <div class="controles">
+        <button type="button" class="secundario" id="verHierarquica" aria-pressed="true">Hierárquica</button>
+        <button type="button" class="secundario" id="verGrafica" aria-pressed="false">Gráfica</button>
+        <button type="button" class="secundario" id="expandir">Expandir tudo</button>
+        <button type="button" class="secundario" id="recolher">Recolher tudo</button>
+      </div>
+      <div id="ast-hierarquica" class="rolagem"><p>Nenhuma árvore gerada.</p></div>
+      <div id="ast-grafica" class="oculto"></div>
+    </section>
+  </div>
 
-                if (!data.sucesso) {
-                    const mensagensErro = data.erros.map(e => `${e.mensagem} (Linha ${e.linha}, Col ${e.coluna})`).join('<br>');
-                    divMensagens.innerHTML = `<div class="error-box"><strong>Erros Léxicos Encontrados:</strong><br>${mensagensErro}</div>`;
-                } else {
-                    divMensagens.innerHTML = `<div class="success-box">Análise concluída com sucesso! ${data.tokens.length} tokens encontrados.</div>`;
-                }
+  <footer>
+    Limitações: a análise semântica (tabela de símbolos, variáveis não declaradas, tipos) será implementada na Etapa 5.
+    O parser para no primeiro erro sintático. Limite de 5000 caracteres por análise.
+  </footer>
+</div>
 
-                data.tokens.forEach(token => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${token.tipo}</td><td><code>${token.lexema}</code></td><td>${token.linha}</td><td>${token.coluna}</td>`;
-                    tbody.appendChild(tr);
-                });
+<script>
+(function () {
+  "use strict";
+  const MAX_CARACTERES = 5000;
+  const API = (location.hostname ? `${location.protocol}//${location.hostname}:5000` : "http://localhost:5000") + "/api/analisar";
 
-            } catch (error) {
-                alert("Erro de comunicação com o servidor.");
-            }
-        });
-    </script>
+  const EXEMPLOS = [
+    { grupo: "Válidos", nome: "Atribuição simples", codigo: "x = 10" },
+    { grupo: "Válidos", nome: "Precedência e parênteses", codigo: "a = 1 + 2 * 3\nb = (1 + 2) * 3\nc = -a / 2.5" },
+    { grupo: "Válidos", nome: "Condicional if/else", codigo: "nota = 7\nif nota >= 6:\n    print(\"aprovado\")\nelse:\n    print(\"reprovado\")" },
+    { grupo: "Válidos", nome: "Repetição while", codigo: "i = 0\nwhile i < 3:\n    print(i)\n    i = i + 1" },
+    { grupo: "Válidos", nome: "Função com return", codigo: "def soma(a, b):\n    return a + b\n\nr = soma(2, 3)\nprint(r)" },
+    { grupo: "Válidos", nome: "Programa combinado", codigo: "# soma dos dobros de 1 a 3\ndef dobro(n):\n    return n * 2\n\ntotal = 0\ni = 1\nwhile i <= 3:\n    total = total + dobro(i)\n    i = i + 1\nif total > 10:\n    print(\"grande\")\nelse:\n    print(\"pequeno\")" },
+    { grupo: "Erros léxicos", nome: "Caractere não reconhecido", codigo: "x = @" },
+    { grupo: "Erros léxicos", nome: "Número malformado", codigo: "valor = 12abc" },
+    { grupo: "Erros léxicos", nome: "Erro léxico + código válido", codigo: "x = 1 $ 2\ny = 3" },
+    { grupo: "Erros sintáticos", nome: "Falta ':' no if", codigo: "if x > 0\n    y = 1" },
+    { grupo: "Erros sintáticos", nome: "Parêntese não fechado", codigo: "print((1 + 2)" },
+    { grupo: "Erros sintáticos", nome: "Operadores consecutivos", codigo: "x = 1 + * 2" },
+    { grupo: "Erros sintáticos", nome: "else sem if", codigo: "else:\n    y = 1" },
+    { grupo: "Erros sintáticos", nome: "Indentação inesperada", codigo: "x = 1\n    y = 2" },
+    { grupo: "Erros sintáticos", nome: "Bloco ausente (fim inesperado)", codigo: "while x < 10:" }
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const codigoEl = $("codigo");
+  let ultimaResposta = null;
+
+  // ---------- utilidades ----------
+  function el(tag, attrs, ...filhos) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "class") e.className = v;
+      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v);
+    }
+    for (const f of filhos) if (f !== null && f !== undefined) e.append(f instanceof Node ? f : String(f));
+    return e;
+  }
+
+  function indiceDaPosicao(texto, linha, coluna) {
+    const linhas = texto.split("\n");
+    let idx = 0;
+    for (let i = 0; i < linha - 1 && i < linhas.length; i++) idx += linhas[i].length + 1;
+    return idx + coluna - 1;
+  }
+
+  function selecionarNoCodigo(linha, coluna, tamanho) {
+    const ini = indiceDaPosicao(codigoEl.value, linha, coluna);
+    codigoEl.focus();
+    codigoEl.setSelectionRange(ini, ini + Math.max(1, tamanho || 1));
+  }
+
+  // ---------- exemplos ----------
+  function montarExemplos() {
+    const sel = $("exemplos");
+    sel.append(el("option", { value: "" }, "-- Exemplos --"));
+    const grupos = {};
+    EXEMPLOS.forEach((ex, i) => {
+      if (!grupos[ex.grupo]) { grupos[ex.grupo] = el("optgroup", { label: ex.grupo }); sel.append(grupos[ex.grupo]); }
+      grupos[ex.grupo].append(el("option", { value: String(i) }, ex.nome));
+    });
+    sel.addEventListener("change", () => {
+      if (sel.value === "") return;
+      codigoEl.value = EXEMPLOS[Number(sel.value)].codigo;
+      atualizarContador();
+    });
+  }
+
+  function atualizarContador() {
+    const n = codigoEl.value.length;
+    const c = $("contador");
+    c.textContent = `${n} / ${MAX_CARACTERES} caracteres`;
+    c.classList.toggle("excedido", n > MAX_CARACTERES);
+  }
+
+  // ---------- validação e chamada ----------
+  async function analisar() {
+    const codigo = codigoEl.value;
+    if (!codigo.trim()) { mostrarAviso("Digite um código ou escolha um exemplo antes de analisar."); return; }
+    if (codigo.length > MAX_CARACTERES) { mostrarAviso(`O código tem ${codigo.length} caracteres; o limite é ${MAX_CARACTERES}.`); return; }
+    let resposta;
+    try {
+      const r = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codigo }) });
+      resposta = await r.json();
+      if (!r.ok) { mostrarAviso(resposta.erro || "Requisição inválida."); return; }
+    } catch (e) {
+      mostrarAviso("Não foi possível falar com o servidor (backend na porta 5000). Verifique se os contêineres estão rodando.");
+      return;
+    }
+    ultimaResposta = resposta;
+    renderizarEtapas(resposta.etapas || {});
+    renderizarMensagens(resposta);
+    renderizarTokens(resposta.tokens || []);
+    renderizarAST(resposta.ast, resposta.etapas || {});
+  }
+
+  function mostrarAviso(texto) {
+    const m = $("mensagens");
+    m.replaceChildren(el("div", { class: "caixa aviso", role: "alert" }, texto));
+  }
+
+  // ---------- etapas ----------
+  function renderizarEtapas(etapas) {
+    const rot = { ok: "concluída", erro: "com erros", nao_executada: "não executada", nao_implementada: "Etapa 5 (não implementada)" };
+    const cls = { ok: "ok", erro: "erro", nao_executada: "pendente", nao_implementada: "pendente" };
+    const itens = [["Léxica", etapas.lexica], ["Sintática", etapas.sintatica], ["Semântica", etapas.semantica || "nao_implementada"]];
+    $("etapas").replaceChildren(...itens.map(([nome, st]) => el("li", { class: "etapa " + (cls[st] || "") }, `${nome}: ${rot[st] || "—"}`)));
+  }
+
+  // ---------- erros ----------
+  function itemErro(e) {
+    const pos = el("button", { type: "button", onclick: () => selecionarNoCodigo(e.linha, e.coluna, (e.lexema || "").length) },
+      `Linha ${e.linha}, coluna ${e.coluna}`);
+    const li = el("li", { class: "erro-item" }, pos, ": ", e.mensagem);
+    if (e.esperado && e.encontrado && !e.mensagem.startsWith("Esperado")) li.append(el("br"), `Esperado: ${e.esperado}. Encontrado: ${e.encontrado}.`);
+    if (e.dica) li.append(el("br"), el("span", { class: "dica" }, "Dica: " + e.dica));
+    return li;
+  }
+
+  function renderizarMensagens(r) {
+    const m = $("mensagens");
+    const lex = r.erros.filter(e => e.tipo === "ERRO_LEXICO");
+    const sint = r.erros.filter(e => e.tipo === "ERRO_SINTATICO");
+    const partes = [];
+    if (r.sucesso) {
+      const vazio = r.ast && r.ast.filhos.length === 0;
+      partes.push(el("div", { class: "caixa ok", role: "status" },
+        `Análise concluída sem erros: ${r.tokens.length} tokens e uma AST com ${contarNos(r.ast)} nós.` +
+        (vazio ? " O código não tem comandos (apenas comentários ou linhas vazias)." : "")));
+    }
+    if (lex.length) {
+      partes.push(el("div", { class: "caixa erro", role: "alert" },
+        el("strong", {}, `Erros léxicos (${lex.length})`), " — caracteres ou trechos que não formam nenhum token válido.",
+        el("ul", { style: "padding-left:0;list-style:none;margin:0" }, ...lex.map(itemErro))));
+      partes.push(el("div", { class: "caixa aviso" },
+        "A análise sintática não foi executada: com erros léxicos a sequência de tokens fica incompleta e o parser apontaria erros que não correspondem ao problema real. Corrija os erros léxicos primeiro."));
+    }
+    if (sint.length) {
+      partes.push(el("div", { class: "caixa erro", role: "alert" },
+        el("strong", {}, "Erro sintático"), " — os tokens são válidos, mas a estrutura não segue a gramática. O parser para no primeiro erro.",
+        el("ul", { style: "padding-left:0;list-style:none;margin:0" }, ...sint.map(itemErro))));
+    }
+    m.replaceChildren(...partes);
+  }
+
+  // ---------- tokens ----------
+  function renderizarTokens(tokens) {
+    const tbody = document.querySelector("#tabela-tokens tbody");
+    if (!tokens.length) { tbody.replaceChildren(el("tr", {}, el("td", { colspan: "5" }, "Nenhum token."))); return; }
+    tbody.replaceChildren(...tokens.map((t, i) => {
+      const tr = el("tr", { "data-pos": `${t.linha}:${t.coluna}` },
+        el("td", {}, i + 1), el("td", {}, t.tipo), el("td", {}, el("code", {}, t.lexema)), el("td", {}, t.linha), el("td", {}, t.coluna));
+      tr.addEventListener("click", () => selecionarNoCodigo(t.linha, t.coluna, t.lexema.length));
+      return tr;
+    }));
+  }
+
+  // ---------- AST ----------
+  function contarNos(no) { return no ? 1 + no.filhos.reduce((s, f) => s + contarNos(f), 0) : 0; }
+
+  function destacarPosicao(no) {
+    document.querySelectorAll(".destacado").forEach(x => x.classList.remove("destacado"));
+    document.querySelectorAll(`[data-no-pos="${no.linha}:${no.coluna}"]`).forEach(x => x.classList.add("destacado"));
+    const linhaToken = document.querySelector(`#tabela-tokens tr[data-pos="${no.linha}:${no.coluna}"]`);
+    if (linhaToken) { linhaToken.classList.add("destacado"); linhaToken.scrollIntoView({ block: "nearest" }); }
+    const tok = (ultimaResposta.tokens || []).find(t => t.linha === no.linha && t.coluna === no.coluna);
+    selecionarNoCodigo(no.linha, no.coluna, tok ? tok.lexema.length : 1);
+  }
+
+  function rotuloNo(no) {
+    const span = el("span", { class: "no", tabindex: "0", role: "button", "data-no-pos": `${no.linha}:${no.coluna}`,
+      "aria-label": `${no.tipo}${no.valor ? " " + no.valor : ""}, linha ${no.linha}, coluna ${no.coluna}` },
+      el("span", { class: "no-tipo" }, no.tipo), " ",
+      no.valor ? el("span", { class: "no-valor" }, no.valor) : null, " ",
+      el("span", { class: "no-pos" }, `(${no.linha}:${no.coluna})`));
+    span.addEventListener("click", (ev) => { ev.preventDefault(); destacarPosicao(no); });
+    span.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); destacarPosicao(no); } });
+    return span;
+  }
+
+  function noHierarquico(no) {
+    if (!no.filhos.length) return el("li", {}, rotuloNo(no));
+    const det = el("details", { class: "no-det", open: "" }, el("summary", {}, rotuloNo(no)),
+      el("ul", {}, ...no.filhos.map(noHierarquico)));
+    return el("li", {}, det);
+  }
+
+  function renderizarAST(ast, etapas) {
+    const h = $("ast-hierarquica");
+    const g = $("ast-grafica");
+    if (!ast) {
+      const msg = etapas.sintatica === "nao_executada" ? "Árvore não gerada: a análise sintática não foi executada por causa de erros léxicos."
+        : "Árvore não gerada: há erro sintático. Corrija-o e analise novamente.";
+      h.replaceChildren(el("p", {}, msg)); g.replaceChildren(el("p", {}, msg));
+      return;
+    }
+    h.replaceChildren(el("ul", { class: "arvore", "aria-label": "Árvore sintática abstrata" }, noHierarquico(ast)));
+    g.replaceChildren(arvoreSVG(ast));
+  }
+
+  // layout simples: cada folha ocupa uma coluna; o pai fica centrado sobre os filhos
+  function arvoreSVG(raiz) {
+    const LARG = 130, ALT = 34, GAP_X = 14, GAP_Y = 46;
+    let proxX = 0, maxProf = 0;
+    const nos = [];
+    (function posicionar(no, prof) {
+      maxProf = Math.max(maxProf, prof);
+      const item = { no, prof };
+      if (!no.filhos.length) { item.x = proxX; proxX += LARG + GAP_X; }
+      else {
+        const filhos = no.filhos.map(f => posicionar(f, prof + 1));
+        item.x = (filhos[0].x + filhos[filhos.length - 1].x) / 2;
+        item.filhos = filhos;
+      }
+      nos.push(item);
+      return item;
+    })(raiz, 0);
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    const w = Math.max(proxX, LARG), hTot = (maxProf + 1) * (ALT + GAP_Y);
+    svg.setAttribute("width", w + 20); svg.setAttribute("height", hTot);
+    svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Representação gráfica da AST");
+    const y = (p) => 10 + p * (ALT + GAP_Y);
+    for (const it of nos) for (const f of (it.filhos || [])) {
+      const l = document.createElementNS(ns, "line");
+      l.setAttribute("x1", 10 + it.x + LARG / 2); l.setAttribute("y1", y(it.prof) + ALT);
+      l.setAttribute("x2", 10 + f.x + LARG / 2); l.setAttribute("y2", y(f.prof));
+      l.setAttribute("stroke", "#888"); svg.append(l);
+    }
+    for (const it of nos) {
+      const gr = document.createElementNS(ns, "g");
+      gr.setAttribute("class", "n"); gr.setAttribute("data-no-pos", `${it.no.linha}:${it.no.coluna}`);
+      gr.setAttribute("transform", `translate(${10 + it.x},${y(it.prof)})`);
+      const r = document.createElementNS(ns, "rect");
+      r.setAttribute("width", LARG); r.setAttribute("height", ALT); r.setAttribute("rx", 6);
+      const t1 = document.createElementNS(ns, "text");
+      t1.setAttribute("x", LARG / 2); t1.setAttribute("y", 14); t1.setAttribute("text-anchor", "middle"); t1.setAttribute("font-weight", "bold");
+      t1.textContent = it.no.tipo;
+      const t2 = document.createElementNS(ns, "text");
+      t2.setAttribute("x", LARG / 2); t2.setAttribute("y", 28); t2.setAttribute("text-anchor", "middle");
+      const val = it.no.valor ? String(it.no.valor) : "";
+      t2.textContent = (val.length > 16 ? val.slice(0, 15) + "…" : val) + `  (${it.no.linha}:${it.no.coluna})`;
+      const titulo = document.createElementNS(ns, "title");
+      titulo.textContent = `${it.no.tipo} ${val} — linha ${it.no.linha}, coluna ${it.no.coluna}`;
+      gr.append(titulo, r, t1, t2);
+      gr.addEventListener("click", () => destacarPosicao(it.no));
+      svg.append(gr);
+    }
+    return svg;
+  }
+
+  // ---------- controles ----------
+  function alternarVisao(grafica) {
+    $("ast-grafica").classList.toggle("oculto", !grafica);
+    $("ast-hierarquica").classList.toggle("oculto", grafica);
+    $("verGrafica").setAttribute("aria-pressed", String(grafica));
+    $("verHierarquica").setAttribute("aria-pressed", String(!grafica));
+  }
+
+  let fonte = 16;
+  function mudarFonte(delta) {
+    fonte = Math.min(24, Math.max(12, fonte + delta));
+    document.documentElement.style.setProperty("--fonte-base", fonte + "px");
+  }
+
+  montarExemplos();
+  atualizarContador();
+  codigoEl.addEventListener("input", atualizarContador);
+  codigoEl.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); analisar(); }
+    if (ev.key === "Tab" && !ev.shiftKey && !ev.ctrlKey) {   // Tab insere 4 espaços (Esc + Tab sai do campo)
+      if (codigoEl.dataset.sairComTab === "1") { codigoEl.dataset.sairComTab = ""; return; }
+      ev.preventDefault();
+      const i = codigoEl.selectionStart, f = codigoEl.selectionEnd;
+      codigoEl.setRangeText("    ", i, f, "end");
+      atualizarContador();
+    }
+    if (ev.key === "Escape") codigoEl.dataset.sairComTab = "1";
+  });
+  $("btnAnalisar").addEventListener("click", analisar);
+  $("verHierarquica").addEventListener("click", () => alternarVisao(false));
+  $("verGrafica").addEventListener("click", () => alternarVisao(true));
+  $("expandir").addEventListener("click", () => document.querySelectorAll("#ast-hierarquica details").forEach(d => d.open = true));
+  $("recolher").addEventListener("click", () => document.querySelectorAll("#ast-hierarquica details").forEach(d => d.open = false));
+  $("fonteMenor").addEventListener("click", () => mudarFonte(-2));
+  $("fonteMaior").addEventListener("click", () => mudarFonte(2));
+})();
+</script>
 </body>
 </html>

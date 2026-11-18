@@ -157,3 +157,136 @@ O professor exige um registro em `docs/` mostrando que você executou os testes.
 
 ## Limitações Conhecidas
 - O sistema realiza apenas a Análise Léxica (Scanner). A Análise Sintática (Parser) e a Análise Semântica serão implementadas nas próximas etapas.
+
+## Etapa 4 — Análise sintática (parser) e árvore sintática abstrata (AST)
+
+Nesta etapa o sistema passou a verificar a **estrutura** do programa e a montar a **AST**, exibida na interface em
+forma hierárquica (navegável por teclado) e gráfica (SVG). A análise semântica **ainda não está implementada**
+(Etapa 5).
+
+### Escopo da linguagem (subconjunto de Python 3)
+
+| Suportado | Não suportado nesta versão |
+|---|---|
+| Atribuição simples (`x = expr`) | `for`, `elif`, `and`/`or`/`not`, `in` |
+| Expressões aritméticas `+ - * /`, menos unário, parênteses | listas, tuplas, dicionários, índices `a[i]` |
+| Comparações `== != < > <= >=` (uma por expressão) | comparações encadeadas (`a < b < c`) |
+| `if` / `else`, `while`, blocos aninhados por indentação | classes, `import`, `try`, `lambda`, decoradores |
+| `def nome(params):` e `return [expr]` | atribuição múltipla / aumentada (`a, b = ...`, `+=`) |
+| Chamadas de função (`print(x)`, `soma(1, 2)`) | comando na mesma linha do `:` (`if x: y = 1`) |
+| Inteiros, reais, textos entre aspas, `True`, `False` | quebra de linha dentro de parênteses; strings com `\"`, `'''` |
+| Comentários de linha (`#`) | mistura de tabulação e espaço na indentação |
+
+### Gramática (EBNF)
+
+```ebnf
+programa        = { comando } FIM_DE_ARQUIVO ;
+comando         = comando_simples NOVA_LINHA | se | enquanto | funcao ;
+comando_simples = retorno | atribuicao | expressao ;
+atribuicao      = IDENTIFICADOR "=" expressao ;
+retorno         = "return" [ expressao ] ;
+se              = "if" expressao ":" bloco [ "else" ":" bloco ] ;
+enquanto        = "while" expressao ":" bloco ;
+funcao          = "def" IDENTIFICADOR "(" [ parametros ] ")" ":" bloco ;
+parametros      = IDENTIFICADOR { "," IDENTIFICADOR } ;
+bloco           = NOVA_LINHA INDENTACAO comando { comando } DEDENTACAO ;
+expressao       = aritmetica [ op_relacional aritmetica ] ;
+op_relacional   = "==" | "!=" | "<" | ">" | "<=" | ">=" ;
+aritmetica      = termo { ( "+" | "-" ) termo } ;
+termo           = fator { ( "*" | "/" ) fator } ;
+fator           = ( "+" | "-" ) fator | atomo ;
+atomo           = IDENTIFICADOR [ "(" [ argumentos ] ")" ]
+                | LITERAL_INTEIRO | LITERAL_REAL | LITERAL_STRING
+                | "True" | "False" | "(" expressao ")" ;
+argumentos      = expressao { "," expressao } ;
+```
+
+`NOVA_LINHA`, `INDENTACAO`, `DEDENTACAO` e `FIM_DE_ARQUIVO` são **tokens estruturais** gerados a partir das linhas e do
+recuo do código (como no Python). Eles são usados pelo parser, mas não aparecem na tabela de tokens.
+
+### Estrutura do backend
+
+```
+backend/
+├── app.py                  # rota POST /api/analisar, validação e orquestração
+├── analisador/
+│   ├── __init__.py
+│   ├── lexico.py           # scanner (Etapa 3) + tokens estruturais
+│   └── sintatico.py        # parser descendente recursivo + AST
+└── tests/
+    ├── test_scanner.py     # regressão da Etapa 3
+    ├── test_parser.py      # casos CT-xx (docs/casos-de-teste.md)
+    └── test_api_etapa4.py  # contrato da API e validação de entrada
+```
+
+### Contrato de comunicação (compatível com a Etapa 3)
+
+Requisição: `POST /api/analisar` com `{"codigo": "<texto>"}` (máximo de 5000 caracteres).
+
+Resposta (HTTP 200). Os campos `sucesso`, `tokens` e `erros` são os mesmos da Etapa 3; `ast` e `etapas` são novos:
+
+```json
+{
+  "sucesso": true,
+  "tokens": [{"tipo": "IDENTIFICADOR", "lexema": "x", "linha": 1, "coluna": 1}, "..."],
+  "erros": [],
+  "ast": {
+    "tipo": "Programa", "valor": null, "linha": 1, "coluna": 1,
+    "filhos": [{
+      "tipo": "Atribuicao", "valor": "=", "linha": 1, "coluna": 1,
+      "filhos": [
+        {"tipo": "Identificador", "valor": "x", "linha": 1, "coluna": 1, "filhos": []},
+        {"tipo": "LiteralInteiro", "valor": "10", "linha": 1, "coluna": 5, "filhos": []}
+      ]
+    }]
+  },
+  "etapas": {"lexica": "ok", "sintatica": "ok", "semantica": "nao_implementada"}
+}
+```
+
+Erro sintático (o parser para no primeiro erro e `ast` vem `null`):
+
+```json
+{
+  "tipo": "ERRO_SINTATICO", "lexema": "", "linha": 1, "coluna": 9,
+  "esperado": "':' ao final do if", "encontrado": "fim da linha",
+  "mensagem": "Esperado ':' ao final do if, mas foi encontrado fim da linha.",
+  "dica": "Em Python, if, else, while e def terminam com ':'."
+}
+```
+
+Valores de `etapas.sintatica`: `ok`, `erro` ou `nao_executada` (quando há erro léxico).
+Entradas inválidas (vazio, só espaços, não texto, acima do limite, corpo sem JSON) retornam HTTP 400 com `{"erro": "..."}`.
+
+Tipos de nó da AST: `Programa`, `Atribuicao`, `Identificador`, `Se`, `Enquanto`, `Funcao`, `Parametros`, `Parametro`,
+`Bloco` (valor `então`, `senão` ou `corpo`), `Retorno`, `Chamada`, `OperacaoBinaria`, `OperacaoRelacional`,
+`OperacaoUnaria`, `LiteralInteiro`, `LiteralReal`, `LiteralTexto`, `LiteralLogico`.
+
+### Decisões de projeto
+
+- **Parser descendente recursivo escrito à mão**: cada regra da gramática é um método, o que deixa o código legível
+  para estudantes e permite mensagens de erro específicas por construção.
+- **Erro léxico interrompe o pipeline**: o parser não é executado, para não gerar erros sintáticos em cascata.
+- **Parada no primeiro erro sintático**, sem recuperação.
+- **Parênteses não viram nós**: a forma da árvore já representa a precedência.
+- **Limites de segurança**: 5000 caracteres por análise e 100 níveis de aninhamento; a interface insere texto com
+  `textContent` (nunca `innerHTML`) para evitar injeção de HTML.
+
+### Como executar e testar
+
+```bash
+docker compose up -d --build                     # sobe frontend (8080) e backend (5000)
+docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
+docker compose down                              # encerra
+```
+
+Acesse `http://localhost:8080`. Os casos de teste estão em [`docs/casos-de-teste.md`](docs/casos-de-teste.md); o
+fluxograma e a arquitetura, em [`docs/fluxograma.md`](docs/fluxograma.md).
+
+### Limitações conhecidas
+
+- A análise semântica e a tabela de símbolos ainda não existem (Etapa 5).
+- O parser relata apenas o primeiro erro sintático.
+- A AST gráfica não tem zoom; árvores grandes exigem rolagem (a visão hierárquica permite recolher subárvores).
+- Não há visualização passo a passo da construção da árvore.
+- A interface foi testada apenas em Chrome (desktop e emulação de 390 px).

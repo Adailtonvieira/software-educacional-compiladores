@@ -1,0 +1,53 @@
+digraph fluxo {
+  graph [rankdir=TB, fontname="Helvetica", fontsize=11, nodesep=0.35, ranksep=0.32, bgcolor="white", pad=0.2];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, fillcolor="#d4edda", color="#2e7d32", penwidth=1.3, width=3.6];
+  edge  [fontname="Helvetica", fontsize=10, color="#444444"];
+
+  inicio   [label="Usuário acessa a interface e\ninsere ou seleciona um código-fonte", shape=box, style="rounded,filled,bold"];
+  vfront   [label="Validação no frontend\n(campo vazio? > 5000 caracteres?)", shape=diamond, width=3.2, height=1.0];
+  vback    [label="POST /api/analisar\nValidação no backend\n(JSON, texto, vazio, limite)", shape=diamond, width=3.2, height=1.1];
+  avisoE   [label="Aviso de entrada inválida\n(HTTP 400 / mensagem na tela)", fillcolor="#fff3cd", color="#b08800", width=2.6];
+  lex      [label="Análise léxica — scanner (Etapa 3)\nexpressão regular mestre"];
+  toks     [label="Tokens + erros léxicos\n(tipo, lexema, linha, coluna)", shape=note];
+  dec      [label="Há erros léxicos?\n(decisão de projeto)", shape=diamond, width=3.0, height=1.0, fillcolor="#e3ecfa", color="#0b4fa3"];
+  ret1     [label="Retorno 1: erros léxicos\nparser NÃO é executado\n(sintatica = \"nao_executada\")", fillcolor="#f8d7da", color="#a12a36", width=2.8];
+  estr     [label="Tokens estruturais\nNOVA_LINHA / INDENTACAO / DEDENTACAO"];
+  sint     [label="Análise sintática — parser (Etapa 4)\ndescendente recursivo, para no 1º erro"];
+  dec2     [label="Erro sintático?", shape=diamond, width=2.4, height=0.8, fillcolor="#e3ecfa", color="#0b4fa3"];
+  ret2     [label="Retorno 2: erro sintático\nesperado / encontrado / dica\n(ast = null)", fillcolor="#f8d7da", color="#a12a36", width=2.8];
+  ast      [label="AST em JSON\n(tipo, valor, linha, coluna, filhos)", shape=note];
+  sem      [label="Análise semântica\nEtapa 5 — NÃO IMPLEMENTADA", style="rounded,dashed", fillcolor="white", color="#888888", fontcolor="#666666"];
+  tab      [label="Tabela de símbolos e erros semânticos\nEtapa 5 — NÃO IMPLEMENTADA", style="rounded,dashed", fillcolor="white", color="#888888", fontcolor="#666666", shape=note];
+  apres    [label="Apresentação didática na interface\nstatus das etapas · erros separados por tipo\ntabela de tokens · AST hierárquica/gráfica\nvínculo nó ↔ token ↔ posição no código", style="rounded,filled,bold", width=4.2];
+
+  inicio -> vfront;
+  vfront -> avisoE [label=" inválida"];
+  vfront -> vback  [label=" válida"];
+  vback  -> avisoE [label=" inválida"];
+  vback  -> lex    [label=" válida"];
+  lex -> toks -> dec;
+  dec -> ret1 [label=" sim"];
+  dec -> estr [label=" não"];
+  estr -> sint -> dec2;
+  dec2 -> ret2 [label=" sim"];
+  dec2 -> ast  [label=" não"];
+  ast -> sem [style=dashed, color="#888888", label=" futuro"];
+  sem -> tab [style=dashed, color="#888888"];
+  tab -> apres [style=dashed, color="#888888"];
+  ast -> apres;
+  ret1 -> apres;
+  ret2 -> apres;
+  avisoE -> apres [style=dotted];
+
+  {rank=same; dec; ret1}
+  {rank=same; dec2; ret2}
+  {rank=same; vfront; avisoE}
+
+  subgraph cluster_leg {
+    label="Legenda"; fontsize=10; color="#bbbbbb"; style="rounded";
+    l1 [label="Implementado", fillcolor="#d4edda", color="#2e7d32", width=1.4, fontsize=9];
+    l2 [label="Pendente (Etapa 5)", style="rounded,dashed", fillcolor="white", color="#888888", fontcolor="#666666", width=1.4, fontsize=9];
+    l3 [label="Retorno de erro", fillcolor="#f8d7da", color="#a12a36", width=1.4, fontsize=9];
+    l1 -> l2 -> l3 [style=invis];
+  }
+}

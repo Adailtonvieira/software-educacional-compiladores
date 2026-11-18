@@ -1,0 +1,33 @@
+digraph arq {
+  graph [rankdir=LR, fontname="Helvetica", fontsize=11, nodesep=0.3, ranksep=0.5, compound=true, pad=0.2];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10, fillcolor="#eef2ff", color="#0b4fa3"];
+  edge  [fontname="Helvetica", fontsize=9, color="#444444"];
+
+  usuario [label="Estudante\n(navegador desktop\nou celular)", shape=ellipse, fillcolor="#ffffff"];
+
+  subgraph cluster_compose {
+    label="Docker Compose (compose.yaml)"; style="rounded,dashed"; color="#777777";
+    subgraph cluster_front {
+      label="Contêiner frontend — nginx (porta 8080→80)"; style="rounded"; color="#0b4fa3";
+      ui [label="index.html (HTML/CSS/JS puro)\n• editor + exemplos + validação\n• status das etapas\n• erros léxicos × sintáticos\n• tabela de tokens\n• AST hierárquica e gráfica (SVG)"];
+    }
+    subgraph cluster_back {
+      label="Contêiner backend — Python 3.11 + Flask (porta 5000)"; style="rounded"; color="#0b4fa3";
+      api [label="app.py\nPOST /api/analisar\nvalidação + orquestração"];
+      lexm [label="analisador/lexico.py\nscanner (regex mestre)\n+ tokens estruturais"];
+      sintm [label="analisador/sintatico.py\nparser descendente recursivo\n→ AST (dicionários/JSON)"];
+      semm [label="analisador/semantico.py\ntabela de símbolos\n(Etapa 5 — pendente)", style="rounded,dashed", fillcolor="white", color="#888888", fontcolor="#666666"];
+      testes [label="tests/ (pytest)\nscanner · parser · API", shape=folder, fillcolor="#f7f7f7", color="#777777"];
+    }
+  }
+
+  usuario -> ui [label="acessa"];
+  ui -> api [label="JSON {codigo}"];
+  api -> ui [label="JSON {sucesso, tokens,\nerros, ast, etapas}"];
+  api -> lexm [label="1"];
+  lexm -> api [label="tokens, erros"];
+  api -> sintm [label="2 (se não houver\nerro léxico)"];
+  sintm -> api [label="ast, erros"];
+  api -> semm [style=dashed, color="#888888", label="3 (futuro)"];
+  testes -> api [style=dotted, arrowhead=none];
+}
