@@ -6,7 +6,31 @@ Comando (com os contêineres rodando):
 docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
 ```
 
-## Execução de 18/11/2026 — revisão da Etapa 3 e Etapa 4
+## Execução de 18/11/2026 (2) — requisitos completos da Etapa 4
+
+| Arquivo | Testes | Resultado |
+|---|---|---|
+| `backend/tests/test_scanner.py` | 82 | 82 aprovados |
+| `backend/tests/test_parser.py` | 59 | 59 aprovados |
+| `backend/tests/test_api_etapa4.py` | 15 | 15 aprovados |
+| `tests_interface/test_interface.py` | 13 | 13 aprovados |
+| **Total** | **169** | **169 aprovados, 0 falhas** |
+
+- Backend: Python 3.13 e pytest 8, fora do Docker. Interface: Playwright com Chrome, com o backend Flask e o frontend
+  servidos localmente (sem nginx).
+- Novos testes do parser: exemplos do enunciado (`10 + 5 * 2`, `20 - 5 - 3`, `(10 + 5) * 2`), regra gramatical de
+  cada nó, posições inicial e final, consumo de todos os tokens pelo parser, posições dos nós iguais às da tabela,
+  mensagens que citam a construção aberta, regra violada no erro e ausência de detalhes internos nas mensagens.
+- Novos testes de endpoint: blocos `lexico` e `sintatico` da resposta e rota `GET /api/gramatica`.
+- Defeito encontrado e corrigido: com o registro da regra em análise, cada nível de aninhamento passou a usar mais
+  quadros de pilha e o caso de 150 parênteses estourava a recursão do Python antes do limite de 100 níveis. Corrigido
+  elevando o limite de recursão no parser e tratando `RecursionError` com mensagem didática (caso CT-53).
+
+**Pendente:** repetir no ambiente Docker (`docker compose up -d --build` e
+`docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v`) e validar o fluxo completo pela interface em
+`http://localhost:8080`, registrando o resultado aqui.
+
+## Execução de 18/11/2026 (1) — revisão da Etapa 3 e Etapa 4
 
 | Arquivo | Testes | Resultado |
 |---|---|---|

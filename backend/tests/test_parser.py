@@ -183,7 +183,8 @@ def test_ct30_for_nao_suportado():
 def test_erro_sintatico_tem_campos_do_contrato():
     e, r = erro_unico("x = 1 +\n")
     assert r["ast"] is None
-    for campo in ("tipo", "lexema", "linha", "coluna", "esperado", "encontrado", "mensagem", "dica"):
+    for campo in ("tipo", "lexema", "linha", "coluna", "esperado", "encontrado", "mensagem", "dica",
+                  "regra", "producao", "abertura"):
         assert campo in e
 
 
@@ -238,3 +239,146 @@ def test_tokens_estruturais_nao_alteram_tabela_de_tokens():
     assert {t["tipo"] for t in tokens}.isdisjoint({"INDENTACAO", "DEDENTACAO", "NOVA_LINHA"})
     assert [t["tipo"] for t in estruturais].count("INDENTACAO") == 1
     assert estruturais[-1]["tipo"] == "FIM_DE_ARQUIVO"
+
+
+# ---------------- exemplos do enunciado (precedência e associatividade) ----------------
+
+def expr_de(codigo):
+    return ast_de(codigo)["filhos"][0]["filhos"][1]
+
+
+def test_enunciado_10_mais_5_vezes_2():
+    assert tipos(expr_de("resultado = 10 + 5 * 2")) == ("OperacaoBinaria", "+", [
+        ("LiteralInteiro", "10", []),
+        ("OperacaoBinaria", "*", [("LiteralInteiro", "5", []), ("LiteralInteiro", "2", [])]),
+    ])
+
+
+def test_enunciado_20_menos_5_menos_3():
+    assert tipos(expr_de("resultado = 20 - 5 - 3")) == ("OperacaoBinaria", "-", [
+        ("OperacaoBinaria", "-", [("LiteralInteiro", "20", []), ("LiteralInteiro", "5", [])]),
+        ("LiteralInteiro", "3", []),
+    ])
+
+
+def test_enunciado_parenteses_10_mais_5_vezes_2():
+    assert tipos(expr_de("resultado = (10 + 5) * 2")) == ("OperacaoBinaria", "*", [
+        ("OperacaoBinaria", "+", [("LiteralInteiro", "10", []), ("LiteralInteiro", "5", [])]),
+        ("LiteralInteiro", "2", []),
+    ])
+
+
+def test_divisao_e_multiplicacao_associam_a_esquerda():
+    e = expr_de("x = 8 / 4 * 2")
+    assert e["valor"] == "*" and e["filhos"][0]["valor"] == "/"
+
+
+def test_unario_tem_precedencia_sobre_multiplicacao():
+    e = expr_de("x = -a * b")
+    assert e["valor"] == "*" and e["filhos"][0]["tipo"] == "OperacaoUnaria"
+
+
+def test_relacional_tem_menor_precedencia_que_aritmetica():
+    e = expr_de("ok = a + 1 > b * 2")
+    assert e["tipo"] == "OperacaoRelacional"
+    assert [f["valor"] for f in e["filhos"]] == ["+", "*"]
+
+
+# ---------------- regra gramatical e posições inicial/final ----------------
+
+def todos_os_nos(no):
+    yield no
+    for f in no["filhos"]:
+        yield from todos_os_nos(f)
+
+
+def test_todo_no_tem_campos_documentados():
+    ast = ast_de("def f(a):\n    return a + 1\nif f(2) > 1:\n    print('ok')\n")
+    for n in todos_os_nos(ast):
+        assert set(n) == {"tipo", "valor", "regra", "linha", "coluna", "inicio", "fim", "filhos"}
+        assert (n["inicio"]["linha"], n["inicio"]["coluna"]) <= (n["fim"]["linha"], n["fim"]["coluna"])
+
+
+def test_regra_que_reconheceu_cada_no():
+    ast = ast_de("x = 1 + 2 * 3")
+    regras = {(n["tipo"], n["valor"]): n["regra"] for n in todos_os_nos(ast)}
+    assert regras[("Programa", None)] == "programa"
+    assert regras[("Atribuicao", "=")] == "atribuicao"
+    assert regras[("OperacaoBinaria", "+")] == "aritmetica"
+    assert regras[("OperacaoBinaria", "*")] == "termo"
+    assert regras[("LiteralInteiro", "3")] == "atomo"
+
+
+def test_trecho_da_atribuicao_vai_do_nome_ao_ultimo_literal():
+    atrib = ast_de("resultado = 10 + 5 * 2")["filhos"][0]
+    assert atrib["inicio"] == {"linha": 1, "coluna": 1}
+    assert atrib["fim"] == {"linha": 1, "coluna": 22}
+
+
+def test_trecho_da_soma_comeca_no_operando_esquerdo():
+    soma = expr_de("x = 10 + 5")
+    assert (soma["linha"], soma["coluna"]) == (1, 8)          # token '+'
+    assert soma["inicio"] == {"linha": 1, "coluna": 5}         # início do '10'
+    assert soma["fim"] == {"linha": 1, "coluna": 10}
+
+
+def test_trecho_do_if_abrange_varias_linhas():
+    se = ast_de("if x > 0:\n    y = 1\nelse:\n    y = 22\n")["filhos"][0]
+    assert se["inicio"] == {"linha": 1, "coluna": 1}
+    assert se["fim"] == {"linha": 4, "coluna": 10}
+
+
+# ---------------- consistência entre tokens e árvore ----------------
+
+PROGRAMAS_VALIDOS = [
+    "x = 10",
+    "x = (1 + 2) * -3 / 4.5",
+    "if a >= b:\n    print(\"maior\")\nelse:\n    print('menor')\n",
+    "def soma(a, b):\n    return a + b\nr = soma(1, 2)\n",
+    "i = 0\nwhile i < 3:\n    if i == 1:\n        print(i)\n    i = i + 1\n",
+]
+
+
+@pytest.mark.parametrize("codigo", PROGRAMAS_VALIDOS)
+def test_parser_consome_exatamente_os_tokens_da_tabela(codigo):
+    r = analisar(codigo)
+    assert r["sucesso"]
+    assert r["sintatico"]["tokens_consumidos"] == len(r["tokens"])
+
+
+@pytest.mark.parametrize("codigo", PROGRAMAS_VALIDOS)
+def test_posicoes_dos_nos_coincidem_com_tokens(codigo):
+    r = analisar(codigo)
+    posicoes = {(t["linha"], t["coluna"]) for t in r["tokens"]}
+    for n in todos_os_nos(r["ast"]):
+        if n["tipo"] == "Programa":
+            continue
+        assert (n["linha"], n["coluna"]) in posicoes, n["tipo"]
+        assert (n["inicio"]["linha"], n["inicio"]["coluna"]) in posicoes, n["tipo"]
+
+
+# ---------------- mensagens com contexto da construção aberta ----------------
+
+def test_fim_inesperado_cita_linha_da_construcao_aberta():
+    e, _ = erro_unico("x = 1\nwhile x < 3:\n")
+    assert "terminou antes de concluir o while iniciado na linha 2" in e["mensagem"]
+    assert e["abertura"] == {"linha": 2, "coluna": 1}
+
+
+def test_parentese_nao_fechado_cita_onde_foi_aberto():
+    e, _ = erro_unico("x = (1 + 2\n")
+    assert "aberto na linha 1, coluna 5" in e["esperado"]
+    assert e["abertura"] == {"linha": 1, "coluna": 5}
+
+
+def test_erro_informa_regra_e_producao_violadas():
+    e, _ = erro_unico("if x > 0\n    y = 1\n")
+    assert e["regra"] == "se"
+    assert e["producao"].startswith('"if" expressao ":" bloco')
+
+
+def test_mensagem_nao_expoe_detalhes_internos():
+    for codigo in ["x = 1 +", "else:", "print((", "def (", "x = " + "(" * 150]:
+        e = analisar(codigo)["erros"][0]
+        texto = " ".join(str(v) for v in e.values())
+        assert "Traceback" not in texto and ".py" not in texto and "Exception" not in texto

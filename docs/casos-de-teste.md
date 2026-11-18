@@ -85,7 +85,14 @@ Redeclaração de identificador: **não se aplica** a Python, em que a reatribui
 | CT-58 | `codigo` não textual (`123`) | HTTP 400 | Validação de entrada | A `test_codigo_nao_texto` |
 | CT-59 | corpo sem JSON | HTTP 400 | Validação de entrada | A `test_requisicao_sem_json` |
 
-## 6. Testes manuais da interface (fluxo completo)
+## 6. Testes da interface
+
+Automatizados em `tests_interface/test_interface.py` (Playwright): árvore exibida para código válido; erro sintático
+com posição e sem árvore; erro léxico distinto do sintático; entrada vazia e acima do limite; destaque de nó, regra e
+trecho; expandir/recolher; mesmas quantidades de nós nas duas visões; filtro por tipo; exportação JSON; passo a passo
+completo; posições da árvore contidas nas da tabela; todos os exemplos do menu; tela de 390 px sem rolagem horizontal.
+
+### Testes manuais (fluxo completo)
 
 Fluxo: inserir código → solicitar análise → visualizar tokens → visualizar AST ou erros.
 

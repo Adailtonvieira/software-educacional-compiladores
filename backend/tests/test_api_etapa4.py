@@ -91,3 +91,35 @@ def test_endpoint_retorna_tokens_com_posicoes(cliente):
         ("LITERAL_INTEIRO", "10", 1, 9), ("DELIMITADOR", ":", 1, 11),
         ("IDENTIFICADOR", "y", 2, 5), ("OPERADOR", "=", 2, 7), ("LITERAL_STRING", "'ok'", 2, 9),
     ]
+
+
+
+def test_resposta_tem_blocos_lexico_e_sintatico(cliente):
+    d = post(cliente, {"codigo": "x = 10 + 5 * 2"}).get_json()
+    assert d["lexico"] == {"sucesso": True, "tokens": d["tokens"], "erros": []}
+    assert d["sintatico"]["executado"] is True and d["sintatico"]["sucesso"] is True
+    assert d["sintatico"]["ast"] == d["ast"] and d["sintatico"]["erros"] == []
+
+
+def test_bloco_sintatico_com_erro(cliente):
+    d = post(cliente, {"codigo": "x = (1 + 2"}).get_json()
+    assert d["lexico"]["sucesso"] is True
+    assert d["sintatico"]["sucesso"] is False and d["sintatico"]["ast"] is None
+    assert d["sintatico"]["erros"][0]["tipo"] == "ERRO_SINTATICO"
+
+
+def test_bloco_sintatico_nao_executado_com_erro_lexico(cliente):
+    d = post(cliente, {"codigo": "x = @"}).get_json()
+    assert d["lexico"]["sucesso"] is False and len(d["lexico"]["erros"]) == 1
+    assert d["sintatico"]["executado"] is False and d["sintatico"]["sucesso"] is False
+    assert "erros léxicos" in d["sintatico"]["motivo"]
+
+
+def test_rota_gramatica(cliente):
+    r = cliente.get("/api/gramatica")
+    assert r.status_code == 200
+    g = r.get_json()
+    assert g["simbolo_inicial"] == "programa"
+    assert g["producoes"]["se"].startswith('"if"')
+    assert g["terminais"]['"if"'] == "PALAVRA_RESERVADA"
+    assert g["terminais"]["IDENTIFICADOR"] == "IDENTIFICADOR"

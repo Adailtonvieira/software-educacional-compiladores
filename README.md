@@ -64,11 +64,14 @@ software-educacional-compiladores/
 │       ├── test_scanner.py      # testes do scanner (análise léxica)
 │       ├── test_parser.py       # testes do parser (casos CT-xx)
 │       └── test_api_etapa4.py   # testes do endpoint e da validação de entrada
+├── tests_interface/
+│   └── test_interface.py        # testes da interface no navegador (Playwright)
 ├── frontend/                    # HTML/CSS/JS puro servido por nginx (porta 8080)
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── index.html
 └── docs/
+    ├── gramatica.md             # gramática, estratégia do parser e estrutura da AST
     ├── casos-de-teste.md        # casos de teste planejados (válidos, inválidos, borda)
     ├── registro_testes.md       # registro das execuções dos testes
     ├── fluxograma.md            # fluxograma e arquitetura (+ .png, .pdf, .dot)
@@ -128,7 +131,16 @@ docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
 |---|---|
 | `tests/test_scanner.py` | Cada categoria léxica, prefixos de palavras reservadas, operadores de dois caracteres, comentários, linha e coluna, acúmulo de vários erros, número malformado, string não fechada, programa completo |
 | `tests/test_parser.py` | Estrutura da AST (precedência, associatividade, blocos), erros sintáticos e casos de borda |
-| `tests/test_api_etapa4.py` | Formato da resposta, compatibilidade com a Etapa 3, validação de entrada (vazio, limite, não texto, sem JSON) |
+| `tests/test_api_etapa4.py` | Formato da resposta (`lexico`, `sintatico`), compatibilidade com a Etapa 3, rota `/api/gramatica`, validação de entrada (vazio, limite, não texto, sem JSON) |
+| `tests_interface/test_interface.py` | Interface no navegador: árvore exibida, erros léxico × sintático, destaque de nó, expandir/recolher, filtro, exportação, passo a passo, consistência tabela × árvore, todos os exemplos, tela de celular |
+
+**Testes da interface** (rodam fora do Docker, com a aplicação no ar):
+
+```bash
+pip install pytest playwright
+playwright install chromium
+pytest tests_interface -v
+```
 
 Os casos estão documentados em [`docs/casos-de-teste.md`](docs/casos-de-teste.md) e as execuções em
 [`docs/registro_testes.md`](docs/registro_testes.md).
@@ -171,6 +183,10 @@ seguintes, para que o estudante veja todos os problemas de uma vez. Mensagens po
 
 ## 6. Escopo sintático e gramática (análise sintática)
 
+A documentação completa (símbolo inicial, terminais × tokens, precedência, exemplos válidos e inválidos, estratégia
+do parser, formato da AST e diferença entre AST e árvore de derivação) está em
+[`docs/gramatica.md`](docs/gramatica.md). Resumo:
+
 | Suportado | Não suportado nesta versão |
 |---|---|
 | Atribuição simples (`x = expr`) | `for`, `elif`, `and`/`or`/`not`, `in` |
@@ -203,6 +219,9 @@ atomo           = IDENTIFICADOR [ "(" [ argumentos ] ")" ]
 argumentos      = expressao { "," expressao } ;
 ```
 
+**Precedência** (da menor para a maior): comparação (não associativa) < `+ -` (à esquerda) < `* /` (à esquerda) <
+unário. Assim, `10 + 5 * 2` é `10 + (5 * 2)`, `20 - 5 - 3` é `(20 - 5) - 3` e `(10 + 5) * 2` multiplica a soma.
+
 `NOVA_LINHA`, `INDENTACAO`, `DEDENTACAO` e `FIM_DE_ARQUIVO` são **tokens estruturais**, gerados a partir das linhas e
 do recuo do código, como no Python. O parser os usa, mas eles **não aparecem** na lista `tokens` da resposta.
 
@@ -232,6 +251,7 @@ Tipos de nó da AST: `Programa`, `Atribuicao`, `Identificador`, `Se`, `Enquanto`
 |---|---|---|
 | 200 | Entrada válida (mesmo que o código tenha erros léxicos ou sintáticos) | objeto de análise (abaixo) |
 | 400 | Corpo não é JSON, `codigo` ausente ou não textual, vazio, só espaços ou acima de 5000 caracteres | `{"erro": "<mensagem>"}` |
+| 500 | Falha inesperada no servidor (nenhum detalhe interno é exposto) | `{"erro": "Erro interno ao analisar o código..."}` |
 
 **Objeto de análise:**
 
@@ -242,15 +262,23 @@ Tipos de nó da AST: `Programa`, `Atribuicao`, `Identificador`, `Se`, `Enquanto`
 | `erros` | lista de Erro | erros léxicos (todos) e, se o parser rodou, o primeiro erro sintático |
 | `ast` | No ou `null` | árvore sintática; `null` se houve erro ou o parser não rodou |
 | `etapas` | objeto | `lexica`: `ok`/`erro`; `sintatica`: `ok`/`erro`/`nao_executada`; `semantica`: `nao_implementada` |
+| `lexico` | objeto | `sucesso`, `tokens`, `erros` (só os léxicos) |
+| `sintatico` | objeto | `executado`, `sucesso`, `ast`, `erros` (só os sintáticos), `tokens_consumidos` (quantos tokens o parser consumiu) e `motivo` (por que não foi executado, ou `null`) |
 
 **Token:** `tipo` (categoria da seção 5), `lexema` (texto original), `linha`, `coluna` (inteiros a partir de 1).
 
 **Erro léxico:** `tipo` = `"ERRO_LEXICO"`, `lexema`, `linha`, `coluna`, `mensagem`.
 
 **Erro sintático:** `tipo` = `"ERRO_SINTATICO"`, `lexema`, `linha`, `coluna`, `mensagem`, `esperado`, `encontrado`,
-`dica` (texto ou `null`).
+`dica` (texto ou `null`), `regra` (não terminal em análise), `producao` (texto da regra) e `abertura`
+(`{linha, coluna}` da construção que ficou aberta, ou `null`).
 
-**No (AST):** `tipo`, `valor` (texto ou `null`), `linha`, `coluna`, `filhos` (lista de No).
+**No (AST):** `tipo`, `valor` (texto ou `null`), `regra` (não terminal que reconheceu o nó), `linha` e `coluna` (token
+que identifica o nó), `inicio` e `fim` (`{linha, coluna}` do trecho completo) e `filhos` (lista de No). Tipos de nó e
+exemplos em [`docs/gramatica.md`](docs/gramatica.md#8-estrutura-da-ast).
+
+**Gramática:** `GET /api/gramatica` devolve `simbolo_inicial`, `producoes`, `nao_terminais`, `terminais` (com a
+categoria de token correspondente) e `categorias_lexicas`.
 
 ### Exemplos
 
@@ -316,7 +344,8 @@ Entrada inválida (HTTP 400):
 { "erro": "O código não pode estar vazio." }
 ```
 
-A Etapa 4 **acrescentou** `ast` e `etapas`; os campos da Etapa 3 (`sucesso`, `tokens`, `erros`) continuam iguais.
+A Etapa 4 **acrescentou** `ast`, `etapas`, `lexico` e `sintatico`; os campos da Etapa 3 (`sucesso`, `tokens`,
+`erros`) continuam iguais. Os exemplos acima mostram só parte dos campos de cada nó.
 
 ---
 
@@ -331,8 +360,16 @@ A Etapa 4 **acrescentou** `ast` e `etapas`; os campos da Etapa 3 (`sucesso`, `to
    - **legenda** com a quantidade de tokens por categoria e a explicação de cada uma (passe o mouse);
    - **tabela** com tipo, lexema, linha e coluna;
    - explicação de como o scanner decide a categoria e por que continua após um erro.
-4. **AST:** visão hierárquica (expandir e recolher) e visão gráfica. Clicar em um nó destaca o token na tabela, o
-   trecho no código classificado e a posição no editor.
+4. **AST:**
+   - visão hierárquica (expandir e recolher tudo) e visão gráfica;
+   - cada nó tem cor **e** selo com letra e, na visão gráfica, forma própria: comando (C, retângulo), expressão
+     (X, elipse), folha (F, pílula), estrutura (E, tracejado);
+   - clicar em um nó mostra a **regra gramatical** que o reconheceu, seleciona o **trecho completo** no editor e
+     destaca o token na tabela e no código classificado;
+   - **filtro por tipo de nó** e **exportação da AST em JSON**;
+   - **passo a passo:** mostra a ordem em que o parser concluiu cada nó, com a regra usada, avançando, voltando ou
+     reproduzindo automaticamente;
+   - explicação da diferença entre tokens, árvore de derivação e AST.
 
 Acessibilidade: operação completa pelo teclado, árvore em texto legível por leitores de tela, botões A−/A+ para o
 tamanho da fonte, foco visível e layout de uma coluna em telas estreitas.
@@ -350,6 +387,8 @@ tamanho da fonte, foco visível e layout de uma coluna em telas estreitas.
   problema real.
 - **Parada no primeiro erro sintático**, sem recuperação, para evitar erros em cascata.
 - **Parênteses não viram nós da AST:** a forma da árvore já representa a precedência.
+- **Gramática como fonte única:** o dicionário `GRAMATICA` alimenta o parser, as mensagens de erro, os nós da AST e a
+  rota `/api/gramatica`, evitando que documentação e código divirjam.
 - **Limites de segurança:** 5000 caracteres por análise e 100 níveis de aninhamento. A interface insere conteúdo
   apenas como texto, nunca como HTML.
 
@@ -362,13 +401,14 @@ tamanho da fonte, foco visível e layout de uma coluna em telas estreitas.
 - Strings não aceitam aspas escapadas (`\"`) nem aspas triplas; números não aceitam notação científica, hexadecimal ou
   `_` como separador.
 - A AST gráfica não tem zoom; para árvores grandes, use a visão hierárquica e recolha subárvores.
-- Não há animação passo a passo da construção da árvore.
+- O passo a passo mostra a ordem de conclusão dos nós, não a derivação completa com as regras intermediárias.
 - Interface testada no Chrome (desktop e largura de 390 px).
 
 ---
 
 ## 11. Documentação complementar
 
+- [`docs/gramatica.md`](docs/gramatica.md): gramática, parser e AST.
 - [`docs/casos-de-teste.md`](docs/casos-de-teste.md): casos de teste por categoria.
 - [`docs/registro_testes.md`](docs/registro_testes.md): registro das execuções.
 - [`docs/fluxograma.md`](docs/fluxograma.md): fluxograma do sistema e arquitetura.
