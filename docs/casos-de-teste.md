@@ -8,7 +8,7 @@ Casos definidos **antes** da interpretação dos resultados. Qualquer ajuste pos
 - **Registro dos resultados:** a coluna "Status" será preenchida na Etapa 6 (aprovado / reprovado / pendente), junto com o
   resultado observado, o defeito encontrado e a correção realizada (ver `registro_testes.md`).
 - **Arquivo de teste:** `backend/tests/test_parser.py` (P), `backend/tests/test_api_etapa4.py` (A),
-  `backend/tests/test_scanner.py` (S, regressão da Etapa 3).
+  `backend/tests/test_scanner.py` (S, suíte completa do scanner, incluindo os testes da Etapa 3).
 
 ## 1. Casos válidos
 

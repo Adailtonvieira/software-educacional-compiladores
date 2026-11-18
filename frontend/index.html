@@ -56,6 +56,23 @@
   code { font-family: Consolas, "Courier New", monospace; }
   details.explicacao { margin-bottom: 10px; color: var(--suave); font-size: .92rem; }
   details.explicacao summary { cursor: pointer; color: var(--primaria); }
+  /* Código classificado (análise léxica) */
+  .legenda { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 8px 0; }
+  .legenda li { font-size: .82rem; padding: 3px 8px; border-radius: 12px; border: 1px solid var(--borda); cursor: help; }
+  pre.classificado { font-family: Consolas, "Courier New", monospace; font-size: .95rem; background: #fbfbfd; border: 1px solid var(--borda);
+    border-radius: 6px; padding: 8px 10px 8px 0; margin: 0 0 12px; overflow-x: auto; line-height: 1.6; white-space: pre; counter-reset: ln; }
+  pre.classificado .ln { display: inline-block; width: 3ch; margin-right: 10px; text-align: right; color: #999; user-select: none; }
+  .tk { border-radius: 3px; padding: 0 1px; cursor: pointer; }
+  .tk:hover, .tk.destacado { outline: 2px solid #d4b106; }
+  .cat-PALAVRA_RESERVADA { background: #e3d7ff; color: #3b1d8f; }
+  .cat-IDENTIFICADOR { background: #d6ecff; color: #0b3d6e; }
+  .cat-LITERAL_INTEIRO, .cat-LITERAL_REAL { background: #d8f3dc; color: #1b4d2b; }
+  .cat-LITERAL_STRING { background: #ffe8cc; color: #7a3e00; }
+  .cat-OPERADOR { background: #ffd6e7; color: #7a0c3e; }
+  .cat-DELIMITADOR { background: #e9ecef; color: #333; }
+  .cat-COMENTARIO { color: #6c757d; font-style: italic; }
+  .cat-ERRO { background: var(--erro-fundo); color: var(--erro-texto); text-decoration: underline wavy #c00; font-weight: bold; }
+  .resumo-lexico { font-size: .9rem; color: var(--suave); margin: 4px 0 8px; }
   /* Árvore hierárquica */
   ul.arvore, ul.arvore ul { list-style: none; margin: 0; padding-left: 18px; }
   ul.arvore { padding-left: 0; }
@@ -130,7 +147,15 @@
         <summary>O que é a análise léxica?</summary>
         <p>O <em>scanner</em> lê o texto caractere por caractere e o agrupa em <strong>tokens</strong>: cada token tem uma
         categoria (tipo), o trecho de texto (lexema) e a posição (linha e coluna). Espaços e comentários são descartados.</p>
+        <p>O scanner testa as categorias numa ordem fixa e escolhe a primeira que casa no ponto atual do texto. Por isso
+        <code>if</code> vira palavra reservada, mas <code>iffy</code> vira identificador, e <code>&gt;=</code> é um único
+        operador, não <code>&gt;</code> seguido de <code>=</code>. Quando nenhuma categoria casa, o trecho vira um
+        <strong>erro léxico</strong>; o scanner registra o erro e <em>continua</em> lendo, para mostrar todos os erros de uma vez.</p>
       </details>
+      <h3 style="font-size:1rem;margin:6px 0 2px">Código classificado</h3>
+      <p class="resumo-lexico" id="resumo-lexico">Analise um código para ver cada trecho colorido pela sua categoria léxica.</p>
+      <ul class="legenda" id="legenda" aria-label="Legenda das categorias léxicas"></ul>
+      <pre class="classificado" id="codigo-classificado" aria-label="Código com os tokens destacados por categoria"></pre>
       <div class="rolagem">
         <table id="tabela-tokens">
           <caption class="sr-only">Tokens identificados</caption>
@@ -261,6 +286,7 @@
     renderizarEtapas(resposta.etapas || {});
     renderizarMensagens(resposta);
     renderizarTokens(resposta.tokens || []);
+    renderizarCodigoClassificado(codigo, resposta.tokens || [], (resposta.erros || []).filter(e => e.tipo === "ERRO_LEXICO"));
     renderizarAST(resposta.ast, resposta.etapas || {});
   }
 
@@ -313,6 +339,77 @@
     m.replaceChildren(...partes);
   }
 
+  // ---------- código classificado ----------
+  const CATEGORIAS = {
+    PALAVRA_RESERVADA: ["Palavra reservada", "Palavras com significado fixo na linguagem: if, else, while, for, def, return, True, False."],
+    IDENTIFICADOR: ["Identificador", "Nomes criados pelo programador: letra ou _ seguida de letras, dígitos ou _."],
+    LITERAL_INTEIRO: ["Literal inteiro", "Número sem parte decimal, como 10."],
+    LITERAL_REAL: ["Literal real", "Número com ponto decimal, como 3.14."],
+    LITERAL_STRING: ["Literal de texto", "Texto entre aspas simples ou duplas, na mesma linha."],
+    OPERADOR: ["Operador", "+ - * / = == != < > <= >= (os de dois caracteres formam um único token)."],
+    DELIMITADOR: ["Delimitador", "( ) [ ] : , — organizam a estrutura do código."],
+    COMENTARIO: ["Comentário", "De # até o fim da linha; descartado pelo scanner (não vira token)."],
+    ERRO: ["Erro léxico", "Trecho que não pertence a nenhuma categoria."]
+  };
+
+  function renderizarCodigoClassificado(codigo, tokens, erros) {
+    const pre = $("codigo-classificado");
+    const linhas = codigo.split("\n");
+    // marca [linha][coluna] -> item (token ou erro)
+    const itens = [...tokens.map(t => ({ ...t, cat: t.tipo })), ...erros.map(e => ({ ...e, cat: "ERRO" }))];
+    const porLinha = {};
+    for (const it of itens) (porLinha[it.linha] = porLinha[it.linha] || []).push(it);
+    const frag = document.createDocumentFragment();
+    linhas.forEach((texto, i) => {
+      const n = i + 1;
+      frag.append(el("span", { class: "ln" }, n));
+      const lista = (porLinha[n] || []).sort((a, b) => a.coluna - b.coluna);
+      let col = 1;
+      for (const it of lista) {
+        if (it.coluna > col) col = adicionarResto(frag, texto, col, it.coluna);
+        const nome = CATEGORIAS[it.cat] ? CATEGORIAS[it.cat][0] : it.cat;
+        const titulo = it.cat === "ERRO" ? it.mensagem : `${nome} — linha ${it.linha}, coluna ${it.coluna}`;
+        const span = el("span", { class: `tk cat-${it.cat}`, title: titulo, "data-pos": `${it.linha}:${it.coluna}` }, it.lexema);
+        span.addEventListener("click", () => destacarToken(it));
+        frag.append(span);
+        col = it.coluna + it.lexema.length;
+      }
+      adicionarResto(frag, texto, col, texto.length + 1);
+      if (n < linhas.length) frag.append("\n");
+    });
+    pre.replaceChildren(frag);
+
+    // legenda com contagem
+    const cont = {};
+    for (const it of itens) cont[it.cat] = (cont[it.cat] || 0) + 1;
+    const temComentario = /#/.test(codigo);
+    const ordem = ["PALAVRA_RESERVADA", "IDENTIFICADOR", "LITERAL_INTEIRO", "LITERAL_REAL", "LITERAL_STRING", "OPERADOR", "DELIMITADOR", "COMENTARIO", "ERRO"];
+    $("legenda").replaceChildren(...ordem.filter(c => cont[c] || (c === "COMENTARIO" && temComentario)).map(c =>
+      el("li", { class: `cat-${c}`, title: CATEGORIAS[c][1] }, `${CATEGORIAS[c][0]}${cont[c] ? ": " + cont[c] : ""}`)));
+    $("resumo-lexico").textContent = `${tokens.length} tokens e ${erros.length} erro(s) léxico(s). ` +
+      "Passe o mouse sobre um trecho ou sobre a legenda para ver a explicação; clique para localizar o token.";
+  }
+
+  // texto entre tokens: espaços normais e comentários (que o scanner descarta)
+  function adicionarResto(frag, texto, de, ate) {
+    const trecho = texto.slice(de - 1, ate - 1);
+    const i = trecho.indexOf("#");
+    if (i >= 0 && !/["']/.test(trecho.slice(0, i))) {
+      frag.append(trecho.slice(0, i), el("span", { class: "cat-COMENTARIO", title: CATEGORIAS.COMENTARIO[1] }, trecho.slice(i)));
+    } else {
+      frag.append(trecho);
+    }
+    return ate;
+  }
+
+  function destacarToken(it) {
+    document.querySelectorAll(".destacado").forEach(x => x.classList.remove("destacado"));
+    document.querySelectorAll(`[data-pos="${it.linha}:${it.coluna}"], [data-no-pos="${it.linha}:${it.coluna}"]`).forEach(x => x.classList.add("destacado"));
+    const linhaTabela = document.querySelector(`#tabela-tokens tr[data-pos="${it.linha}:${it.coluna}"]`);
+    if (linhaTabela) linhaTabela.scrollIntoView({ block: "nearest" });
+    selecionarNoCodigo(it.linha, it.coluna, it.lexema.length);
+  }
+
   // ---------- tokens ----------
   function renderizarTokens(tokens) {
     const tbody = document.querySelector("#tabela-tokens tbody");
@@ -330,7 +427,7 @@
 
   function destacarPosicao(no) {
     document.querySelectorAll(".destacado").forEach(x => x.classList.remove("destacado"));
-    document.querySelectorAll(`[data-no-pos="${no.linha}:${no.coluna}"]`).forEach(x => x.classList.add("destacado"));
+    document.querySelectorAll(`[data-no-pos="${no.linha}:${no.coluna}"], .tk[data-pos="${no.linha}:${no.coluna}"]`).forEach(x => x.classList.add("destacado"));
     const linhaToken = document.querySelector(`#tabela-tokens tr[data-pos="${no.linha}:${no.coluna}"]`);
     if (linhaToken) { linhaToken.classList.add("destacado"); linhaToken.scrollIntoView({ block: "nearest" }); }
     const tok = (ultimaResposta.tokens || []).find(t => t.linha === no.linha && t.coluna === no.coluna);

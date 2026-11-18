@@ -74,3 +74,20 @@ def test_codigo_nao_texto(cliente):
 def test_requisicao_sem_json(cliente):
     r = cliente.post("/api/analisar", data="x = 1", content_type="text/plain")
     assert r.status_code == 400
+
+
+def test_endpoint_acumula_varios_erros_lexicos(cliente):
+    dados = post(cliente, {"codigo": "a = @\nb = $\nc = 3"}).get_json()
+    assert dados["sucesso"] is False
+    assert [(e["lexema"], e["linha"], e["coluna"]) for e in dados["erros"]] == [("@", 1, 5), ("$", 2, 5)]
+    assert [t["lexema"] for t in dados["tokens"]] == ["a", "=", "b", "=", "c", "=", "3"]
+    assert dados["etapas"]["sintatica"] == "nao_executada"
+
+
+def test_endpoint_retorna_tokens_com_posicoes(cliente):
+    dados = post(cliente, {"codigo": "if x >= 10:\n    y = 'ok'"}).get_json()
+    assert [(t["tipo"], t["lexema"], t["linha"], t["coluna"]) for t in dados["tokens"]] == [
+        ("PALAVRA_RESERVADA", "if", 1, 1), ("IDENTIFICADOR", "x", 1, 4), ("OPERADOR", ">=", 1, 6),
+        ("LITERAL_INTEIRO", "10", 1, 9), ("DELIMITADOR", ":", 1, 11),
+        ("IDENTIFICADOR", "y", 2, 5), ("OPERADOR", "=", 2, 7), ("LITERAL_STRING", "'ok'", 2, 9),
+    ]

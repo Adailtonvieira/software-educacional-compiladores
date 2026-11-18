@@ -1,183 +1,185 @@
-# software-educacional-compiladores
+# Software educacional de compiladores
 
-## Introdução
+Ferramenta web para apoiar o ensino de **compiladores**. O estudante escreve (ou escolhe) um programa em um
+**subconjunto de Python** e acompanha as etapas da compilação: os **tokens** reconhecidos pela análise léxica, a
+**árvore sintática abstrata (AST)** montada pela análise sintática e os **erros** de cada etapa, com linha, coluna e
+explicação.
 
-Este projeto consiste no desenvolvimento de um **software educacional para o ensino de compiladores**, com foco nas fases de análise léxica e sintática. A ferramenta é voltada a estudantes de graduação em Ciência da Computação que enfrentam dificuldades na transição entre a teoria e a prática no estudo de compiladores.
-
-O software adota uma abordagem **web interativa**, permitindo que os alunos visualizem o processo de compilação passo a passo, desde a tokenização do código-fonte até a construção da árvore sintática. Esta primeira etapa estabelece a fundação do projeto: estrutura de pastas, ambiente Docker funcional e uma aplicação web mínima exibindo a mensagem "Hello, World!", provando que toda a cadeia (frontend + backend) está operacional.
-
----
-
-## Linguagem Foco
-
-**Python** - escolhida pela simplicidade sintática e ampla adoção acadêmica.
-
----
-
-## Justificativa da Escolha
-
-A escolha do Python como linguagem foco do software educacional baseia-se em três razões principais:
-
-1. **Simplicidade sintática** - Python possui uma gramática limpa e legível, o que permite que o estudante concentre seus esforços na compreensão dos conceitos de compilação (análise léxica, sintática e semântica) sem se dispersar com complexidades sintáticas da própria linguagem.
-
-2. **Disponibilidade de bibliotecas de referência** - Ferramentas como PLY e Lark oferecem implementações de analisadores que podem servir como base de comparação e inspiração para o desenvolvimento do software.
-
-3. **Ampla adoção acadêmica** - Python é a linguagem introdutória mais utilizada em cursos de Ciência da Computação no Brasil, o que facilita a adoção do software por alunos e professores.
-
-Além disso, a escolha de Python alinha-se ao público-alvo (graduandos em Ciência da Computação), que tipicamente já possui familiaridade com a linguagem.
+| Etapa | Situação | Conteúdo |
+|---|---|---|
+| 1 | ✅ | Estrutura de pastas, Docker Compose, "Hello, World!" |
+| 2 | ✅ | Comunicação frontend ↔ backend e validação de entrada |
+| 3 | ✅ | **Análise léxica** (scanner), tabela de tokens, erros léxicos |
+| 4 | ✅ | **Análise sintática** (parser), AST, erros sintáticos |
+| 5 | ⏳ | Análise semântica e tabela de símbolos |
 
 ---
 
-## Subconjunto Inicial
+## Sumário
 
-Para tornar o projeto viável dentro do prazo da disciplina, foi delimitado um **subconjunto inicial** da linguagem Python. Não se pretende cobrir a linguagem inteira, mas sim as construções mais fundamentais:
-
-- **Declaração de variáveis** 
-- **Operadores aritméticos** 
-- **Estruturas condicionais simples** 
-- **Expressões de comparação**
-
-Novas construções serão incorporadas gradativamente nas etapas seguintes do projeto, conforme a evolução do software.
+1. [Linguagem foco e justificativa](#1-linguagem-foco-e-justificativa)
+2. [Estrutura do projeto](#2-estrutura-do-projeto)
+3. [Como executar](#3-como-executar)
+4. [Como executar os testes](#4-como-executar-os-testes)
+5. [Escopo léxico](#5-escopo-léxico-análise-léxica)
+6. [Escopo sintático e gramática](#6-escopo-sintático-e-gramática-análise-sintática)
+7. [Contrato de comunicação (API)](#7-contrato-de-comunicação-api)
+8. [Interface](#8-interface)
+9. [Decisões de projeto](#9-decisões-de-projeto)
+10. [Limitações conhecidas](#10-limitações-conhecidas)
+11. [Documentação complementar](#11-documentação-complementar)
 
 ---
 
-## Estrutura do Projeto
-> software-educacional-compiladores/
-    > backend/ 
-      >    app.py 
-      >    requirements.txt 
-      >    Dockerfile 
+## 1. Linguagem foco e justificativa
 
-    > frontend/
-      > index.html
-      > nginx.conf 
-      > Dockerfile 
+**Python 3 (subconjunto).** A escolha se apoia em três razões:
 
-> compose.yaml # Orquestração dos serviços com Docker Compose
-> README.md
+1. **Simplicidade sintática:** o estudante concentra a atenção nos conceitos de compilação, e não na complexidade da
+   linguagem analisada.
+2. **Familiaridade do público-alvo:** Python é a linguagem introdutória mais usada nos cursos de Computação, então as
+   construções analisadas já são conhecidas.
+3. **Indentação significativa:** blocos definidos por recuo geram exemplos léxicos e sintáticos interessantes, pouco
+   comuns nas linguagens didáticas inventadas.
 
+Não se pretende analisar Python inteiro: apenas as construções listadas nas seções 5 e 6.
 
+---
 
+## 2. Estrutura do projeto
 
-## Como Clonar e Rodar em Qualquer Máquina
+```
+software-educacional-compiladores/
+├── compose.yaml                 # orquestra os contêineres frontend e backend
+├── README.md
+├── backend/                     # Python 3.11 + Flask (porta 5000)
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── app.py                   # rota POST /api/analisar: validação e orquestração
+│   ├── analisador/
+│   │   ├── __init__.py
+│   │   ├── lexico.py            # scanner + tokens estruturais de indentação
+│   │   └── sintatico.py         # parser descendente recursivo + AST
+│   └── tests/
+│       ├── test_scanner.py      # testes do scanner (análise léxica)
+│       ├── test_parser.py       # testes do parser (casos CT-xx)
+│       └── test_api_etapa4.py   # testes do endpoint e da validação de entrada
+├── frontend/                    # HTML/CSS/JS puro servido por nginx (porta 8080)
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   └── index.html
+└── docs/
+    ├── casos-de-teste.md        # casos de teste planejados (válidos, inválidos, borda)
+    ├── registro_testes.md       # registro das execuções dos testes
+    ├── fluxograma.md            # fluxograma e arquitetura (+ .png, .pdf, .dot)
+    └── ...
+```
 
-Esta seção descreve o passo a passo para executar o projeto em uma máquina que nunca teve contato com ele. Qualquer pessoa com os pré-requisitos instalados conseguirá reproduzir o ambiente.
+---
+
+## 3. Como executar
 
 ### Pré-requisitos
 
-Antes de começar, certifique-se de que a máquina possui:
+| Ferramenta | Versão mínima | Como verificar |
+|---|---|---|
+| Git | 2.30+ | `git --version` |
+| Docker Desktop | 24+ | `docker --version` |
+| Docker Compose | v2+ | `docker compose version` |
 
-| Ferramenta     | Versão mínima | Como verificar |
-| Git            | 2.30+         | `git --version` |
-| Docker Desktop | 24+           | `docker --version` |
-| Docker Compose | v2+           | `docker compose version` |
-
-#### Observação para Windows
-
-O Docker Desktop no Windows requer:
-
-- **WSL 2** instalado e configurado
-- Uma **distribuição Linux** (ex: Ubuntu) instalada no WSL
-
-Para instalar o WSL e o Ubuntu, execute no **PowerShell como Administrador**:
+**Windows:** o Docker Desktop precisa do **WSL 2** com uma distribuição Linux. Para instalar, no PowerShell como
+administrador:
 
 ```powershell
 wsl --install -d Ubuntu
+```
 
-## Funcionalidades da Etapa 3 (Análise Léxica)
+### Passo a passo
 
-- Scanner implementado em Python para o subconjunto da linguagem.
-- Identificação de Palavras Reservadas, Identificadores, Literais, Operadores e Delimitadores.
-- Detecção de erros léxicos com indicação de linha e coluna.
-- Tabela interativa no frontend exibindo os tokens.
+```bash
+git clone https://github.com/Adailtonvieira/software-educacional-compiladores.git
+cd software-educacional-compiladores
+docker compose up -d --build
+```
 
-## Escopo Léxico (Subconjunto de Python)
+- Interface: <http://localhost:8080>
+- API: <http://localhost:5000/api/analisar>
 
-| Categoria | Exemplos |
-| :--- | :--- |
-| **Palavras reservadas** | `if`, `else`, `while`, `for`, `def`, `return`, `True`, `False` |
-| **Identificadores** | `x`, `numero`, `_variavel`, `contador1` |
-| **Literais** | `10`, `3.14`, `"texto"`, `'a'` |
-| **Operadores** | `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `>`, `<` |
-| **Delimitadores** | `(`, `)`, `[`, `]`, `:`, `,` |
-| **Comentários** | `# linha` (ignorados) |
+Para encerrar:
 
-## Como Executar os Testes Automatizados
+```bash
+docker compose down
+```
 
-Para rodar os testes no Docker, utilize o comando:
+Depois de atualizar o código (`git pull`), rode `docker compose up -d --build` de novo e recarregue a página com
+**Ctrl+F5**.
+
+---
+
+## 4. Como executar os testes
+
+Com os contêineres rodando:
+
 ```bash
 docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
+```
 
-## Contrato de Comunicação (API)
+| Arquivo | O que testa |
+|---|---|
+| `tests/test_scanner.py` | Cada categoria léxica, prefixos de palavras reservadas, operadores de dois caracteres, comentários, linha e coluna, acúmulo de vários erros, número malformado, string não fechada, programa completo |
+| `tests/test_parser.py` | Estrutura da AST (precedência, associatividade, blocos), erros sintáticos e casos de borda |
+| `tests/test_api_etapa4.py` | Formato da resposta, compatibilidade com a Etapa 3, validação de entrada (vazio, limite, não texto, sem JSON) |
 
-**Requisição (POST /api/analisar):**
-```json
-{ "codigo": "x = 10" }
+Os casos estão documentados em [`docs/casos-de-teste.md`](docs/casos-de-teste.md) e as execuções em
+[`docs/registro_testes.md`](docs/registro_testes.md).
 
+---
 
-{
-  "sucesso": true,
-  "tokens": [
-    { "tipo": "IDENTIFICADOR", "lexema": "x", "linha": 1, "coluna": 1 },
-    { "tipo": "OPERADOR", "lexema": "=", "linha": 1, "coluna": 3 },
-    { "tipo": "LITERAL_INTEIRO", "lexema": "10", "linha": 1, "coluna": 5 }
-  ],
-  "erros": []
-}
+## 5. Escopo léxico (análise léxica)
 
-{
-  "sucesso": false,
-  "tokens": [],
-  "erros": [
-    { "tipo": "ERRO_LEXICO", "lexema": "@", "linha": 1, "coluna": 5, "mensagem": "Caractere não reconhecido: '@'" }
-  ]
-}
+O scanner (`backend/analisador/lexico.py`) percorre o código com **uma expressão regular mestre** formada por grupos
+nomeados. As categorias são testadas **na ordem da tabela**, e vence a primeira que casa na posição atual. Espaços e
+comentários são consumidos, mas não viram tokens.
 
+| Ordem | Categoria (`tipo`) | Padrão | Exemplos válidos | Observações |
+|---|---|---|---|---|
+| 1 | `PALAVRA_RESERVADA` | `if else while for def return True False` (palavra inteira) | `if`, `True` | `iffy` e `true` são identificadores |
+| 2 | *erro:* número malformado | dígitos seguidos de letra ou `_` | — | `12abc` gera **um** erro léxico |
+| 3 | `IDENTIFICADOR` | letra ou `_`, seguida de letras, dígitos ou `_` | `x`, `_total`, `contador1` | — |
+| 4 | `LITERAL_REAL` | dígitos `.` dígitos | `3.14`, `0.5` | testado antes do inteiro |
+| 5 | `LITERAL_INTEIRO` | dígitos | `0`, `42` | — |
+| 6 | `LITERAL_STRING` | texto entre `"` ou `'` na mesma linha | `"ok"`, `'a'`, `""` | `#` dentro de string não é comentário |
+| 7 | *erro:* string não fechada | aspa sem fechamento até o fim da linha | — | gera um erro léxico |
+| 8 | `OPERADOR` | `==` `!=` `<=` `>=` `+` `-` `*` `/` `=` `<` `>` | `>=` | os de dois caracteres formam **um** token |
+| 9 | `DELIMITADOR` | `(` `)` `[` `]` `:` `,` | `:` | — |
+| 10 | *(ignorado)* comentário | `#` até o fim da linha | `# nota` | não gera token |
+| 11 | *(ignorado)* espaço | espaço, tabulação, `\r`, `\n` | — | só atualiza linha e coluna |
+| 12 | *erro:* caractere não reconhecido | qualquer outro caractere | — | `@ $ ? ! & ; { } % π`... |
 
-#### 3. Registro dos Testes (Item 6 e 9)
-O professor exige um registro em `docs/` mostrando que você executou os testes.
-**Como resolver:** 
-1. No seu GitHub, vá na pasta `docs`.
-2. Clique em "Add file" -> "Create new file".
-3. Nomeie como `registro_testes.md`.
-4. Cole o seguinte texto:
+**Linha e coluna** começam em 1. A coluna conta caracteres (uma tabulação conta como 1).
 
-```markdown
-# Registro de Testes - Etapa 3
+**Erros léxicos.** O scanner **não para** no primeiro erro: registra o erro, avança e continua reconhecendo os tokens
+seguintes, para que o estudante veja todos os problemas de uma vez. Mensagens possíveis:
 
-## Testes Unitários do Scanner
-- **Comando:** `docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v`
-- **Resultado:** 4 testes passaram com sucesso (Tokens básicos, Palavras Reservadas, Erro Léxico, Requisição Vazia).
-- **Falhas encontradas:** Nenhuma falha na execução final.
+| Situação | Mensagem |
+|---|---|
+| Caractere fora do alfabeto | `Caractere não reconhecido: '@'` |
+| Número seguido de letra | `Literal numérico malformado: '12abc' (um nome não pode começar com dígito)` |
+| Aspa sem fechamento na linha | `String não fechada: "abc (faltou a aspa final na mesma linha)` |
 
-## Testes de Regressão (Etapas 1 e 2)
-- O ambiente Docker subiu corretamente.
-- A comunicação frontend-backend continua funcionando.
-- A interface não quebrou ao inserir entradas inválidas.
+---
 
-## Limitações Conhecidas
-- O sistema realiza apenas a Análise Léxica (Scanner). A Análise Sintática (Parser) e a Análise Semântica serão implementadas nas próximas etapas.
-
-## Etapa 4 — Análise sintática (parser) e árvore sintática abstrata (AST)
-
-Nesta etapa o sistema passou a verificar a **estrutura** do programa e a montar a **AST**, exibida na interface em
-forma hierárquica (navegável por teclado) e gráfica (SVG). A análise semântica **ainda não está implementada**
-(Etapa 5).
-
-### Escopo da linguagem (subconjunto de Python 3)
+## 6. Escopo sintático e gramática (análise sintática)
 
 | Suportado | Não suportado nesta versão |
 |---|---|
 | Atribuição simples (`x = expr`) | `for`, `elif`, `and`/`or`/`not`, `in` |
-| Expressões aritméticas `+ - * /`, menos unário, parênteses | listas, tuplas, dicionários, índices `a[i]` |
+| Expressões `+ - * /`, menos unário, parênteses | listas, tuplas, dicionários, índices `a[i]` |
 | Comparações `== != < > <= >=` (uma por expressão) | comparações encadeadas (`a < b < c`) |
 | `if` / `else`, `while`, blocos aninhados por indentação | classes, `import`, `try`, `lambda`, decoradores |
-| `def nome(params):` e `return [expr]` | atribuição múltipla / aumentada (`a, b = ...`, `+=`) |
+| `def nome(params):` e `return [expr]` | atribuição múltipla ou aumentada (`a, b = ...`, `+=`) |
 | Chamadas de função (`print(x)`, `soma(1, 2)`) | comando na mesma linha do `:` (`if x: y = 1`) |
-| Inteiros, reais, textos entre aspas, `True`, `False` | quebra de linha dentro de parênteses; strings com `\"`, `'''` |
-| Comentários de linha (`#`) | mistura de tabulação e espaço na indentação |
-
-### Gramática (EBNF)
+| Inteiros, reais, textos, `True`, `False`, comentários | quebra de linha dentro de parênteses; mistura de tab e espaço |
 
 ```ebnf
 programa        = { comando } FIM_DE_ARQUIVO ;
@@ -201,50 +203,103 @@ atomo           = IDENTIFICADOR [ "(" [ argumentos ] ")" ]
 argumentos      = expressao { "," expressao } ;
 ```
 
-`NOVA_LINHA`, `INDENTACAO`, `DEDENTACAO` e `FIM_DE_ARQUIVO` são **tokens estruturais** gerados a partir das linhas e do
-recuo do código (como no Python). Eles são usados pelo parser, mas não aparecem na tabela de tokens.
+`NOVA_LINHA`, `INDENTACAO`, `DEDENTACAO` e `FIM_DE_ARQUIVO` são **tokens estruturais**, gerados a partir das linhas e
+do recuo do código, como no Python. O parser os usa, mas eles **não aparecem** na lista `tokens` da resposta.
 
-### Estrutura do backend
+Tipos de nó da AST: `Programa`, `Atribuicao`, `Identificador`, `Se`, `Enquanto`, `Funcao`, `Parametros`, `Parametro`,
+`Bloco` (valor `então`, `senão` ou `corpo`), `Retorno`, `Chamada`, `OperacaoBinaria`, `OperacaoRelacional`,
+`OperacaoUnaria`, `LiteralInteiro`, `LiteralReal`, `LiteralTexto`, `LiteralLogico`.
 
+---
+
+## 7. Contrato de comunicação (API)
+
+### Requisição
+
+`POST /api/analisar` com `Content-Type: application/json`:
+
+```json
+{ "codigo": "x = 10" }
 ```
-backend/
-├── app.py                  # rota POST /api/analisar, validação e orquestração
-├── analisador/
-│   ├── __init__.py
-│   ├── lexico.py           # scanner (Etapa 3) + tokens estruturais
-│   └── sintatico.py        # parser descendente recursivo + AST
-└── tests/
-    ├── test_scanner.py     # regressão da Etapa 3
-    ├── test_parser.py      # casos CT-xx (docs/casos-de-teste.md)
-    └── test_api_etapa4.py  # contrato da API e validação de entrada
-```
 
-### Contrato de comunicação (compatível com a Etapa 3)
+| Campo | Tipo | Regras |
+|---|---|---|
+| `codigo` | texto | obrigatório; não pode ser vazio nem só espaços; até 5000 caracteres |
 
-Requisição: `POST /api/analisar` com `{"codigo": "<texto>"}` (máximo de 5000 caracteres).
+### Respostas
 
-Resposta (HTTP 200). Os campos `sucesso`, `tokens` e `erros` são os mesmos da Etapa 3; `ast` e `etapas` são novos:
+| HTTP | Quando | Corpo |
+|---|---|---|
+| 200 | Entrada válida (mesmo que o código tenha erros léxicos ou sintáticos) | objeto de análise (abaixo) |
+| 400 | Corpo não é JSON, `codigo` ausente ou não textual, vazio, só espaços ou acima de 5000 caracteres | `{"erro": "<mensagem>"}` |
+
+**Objeto de análise:**
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `sucesso` | booleano | `true` se não houve nenhum erro |
+| `tokens` | lista de Token | tokens na ordem do código (também quando há erros léxicos) |
+| `erros` | lista de Erro | erros léxicos (todos) e, se o parser rodou, o primeiro erro sintático |
+| `ast` | No ou `null` | árvore sintática; `null` se houve erro ou o parser não rodou |
+| `etapas` | objeto | `lexica`: `ok`/`erro`; `sintatica`: `ok`/`erro`/`nao_executada`; `semantica`: `nao_implementada` |
+
+**Token:** `tipo` (categoria da seção 5), `lexema` (texto original), `linha`, `coluna` (inteiros a partir de 1).
+
+**Erro léxico:** `tipo` = `"ERRO_LEXICO"`, `lexema`, `linha`, `coluna`, `mensagem`.
+
+**Erro sintático:** `tipo` = `"ERRO_SINTATICO"`, `lexema`, `linha`, `coluna`, `mensagem`, `esperado`, `encontrado`,
+`dica` (texto ou `null`).
+
+**No (AST):** `tipo`, `valor` (texto ou `null`), `linha`, `coluna`, `filhos` (lista de No).
+
+### Exemplos
+
+Sucesso:
 
 ```json
 {
   "sucesso": true,
-  "tokens": [{"tipo": "IDENTIFICADOR", "lexema": "x", "linha": 1, "coluna": 1}, "..."],
+  "tokens": [
+    { "tipo": "IDENTIFICADOR", "lexema": "x", "linha": 1, "coluna": 1 },
+    { "tipo": "OPERADOR", "lexema": "=", "linha": 1, "coluna": 3 },
+    { "tipo": "LITERAL_INTEIRO", "lexema": "10", "linha": 1, "coluna": 5 }
+  ],
   "erros": [],
   "ast": {
     "tipo": "Programa", "valor": null, "linha": 1, "coluna": 1,
     "filhos": [{
       "tipo": "Atribuicao", "valor": "=", "linha": 1, "coluna": 1,
       "filhos": [
-        {"tipo": "Identificador", "valor": "x", "linha": 1, "coluna": 1, "filhos": []},
-        {"tipo": "LiteralInteiro", "valor": "10", "linha": 1, "coluna": 5, "filhos": []}
+        { "tipo": "Identificador", "valor": "x", "linha": 1, "coluna": 1, "filhos": [] },
+        { "tipo": "LiteralInteiro", "valor": "10", "linha": 1, "coluna": 5, "filhos": [] }
       ]
     }]
   },
-  "etapas": {"lexica": "ok", "sintatica": "ok", "semantica": "nao_implementada"}
+  "etapas": { "lexica": "ok", "sintatica": "ok", "semantica": "nao_implementada" }
 }
 ```
 
-Erro sintático (o parser para no primeiro erro e `ast` vem `null`):
+Vários erros léxicos acumulados, para o código `a = @` / `b = $` em duas linhas (o parser não é executado):
+
+```json
+{
+  "sucesso": false,
+  "tokens": [
+    { "tipo": "IDENTIFICADOR", "lexema": "a", "linha": 1, "coluna": 1 },
+    { "tipo": "OPERADOR", "lexema": "=", "linha": 1, "coluna": 3 },
+    { "tipo": "IDENTIFICADOR", "lexema": "b", "linha": 2, "coluna": 1 },
+    { "tipo": "OPERADOR", "lexema": "=", "linha": 2, "coluna": 3 }
+  ],
+  "erros": [
+    { "tipo": "ERRO_LEXICO", "lexema": "@", "linha": 1, "coluna": 5, "mensagem": "Caractere não reconhecido: '@'" },
+    { "tipo": "ERRO_LEXICO", "lexema": "$", "linha": 2, "coluna": 5, "mensagem": "Caractere não reconhecido: '$'" }
+  ],
+  "ast": null,
+  "etapas": { "lexica": "erro", "sintatica": "nao_executada", "semantica": "nao_implementada" }
+}
+```
+
+Erro sintático (`if x > 0` sem `:`):
 
 ```json
 {
@@ -255,38 +310,65 @@ Erro sintático (o parser para no primeiro erro e `ast` vem `null`):
 }
 ```
 
-Valores de `etapas.sintatica`: `ok`, `erro` ou `nao_executada` (quando há erro léxico).
-Entradas inválidas (vazio, só espaços, não texto, acima do limite, corpo sem JSON) retornam HTTP 400 com `{"erro": "..."}`.
+Entrada inválida (HTTP 400):
 
-Tipos de nó da AST: `Programa`, `Atribuicao`, `Identificador`, `Se`, `Enquanto`, `Funcao`, `Parametros`, `Parametro`,
-`Bloco` (valor `então`, `senão` ou `corpo`), `Retorno`, `Chamada`, `OperacaoBinaria`, `OperacaoRelacional`,
-`OperacaoUnaria`, `LiteralInteiro`, `LiteralReal`, `LiteralTexto`, `LiteralLogico`.
-
-### Decisões de projeto
-
-- **Parser descendente recursivo escrito à mão**: cada regra da gramática é um método, o que deixa o código legível
-  para estudantes e permite mensagens de erro específicas por construção.
-- **Erro léxico interrompe o pipeline**: o parser não é executado, para não gerar erros sintáticos em cascata.
-- **Parada no primeiro erro sintático**, sem recuperação.
-- **Parênteses não viram nós**: a forma da árvore já representa a precedência.
-- **Limites de segurança**: 5000 caracteres por análise e 100 níveis de aninhamento; a interface insere texto com
-  `textContent` (nunca `innerHTML`) para evitar injeção de HTML.
-
-### Como executar e testar
-
-```bash
-docker compose up -d --build                     # sobe frontend (8080) e backend (5000)
-docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
-docker compose down                              # encerra
+```json
+{ "erro": "O código não pode estar vazio." }
 ```
 
-Acesse `http://localhost:8080`. Os casos de teste estão em [`docs/casos-de-teste.md`](docs/casos-de-teste.md); o
-fluxograma e a arquitetura, em [`docs/fluxograma.md`](docs/fluxograma.md).
+A Etapa 4 **acrescentou** `ast` e `etapas`; os campos da Etapa 3 (`sucesso`, `tokens`, `erros`) continuam iguais.
 
-### Limitações conhecidas
+---
+
+## 8. Interface
+
+1. **Código-fonte:** editor com 15 exemplos (válidos, com erro léxico e com erro sintático), contador de caracteres e
+   atalho **Ctrl+Enter**. A tecla Tab insere 4 espaços; **Esc** seguido de **Tab** sai do editor.
+2. **Etapas da compilação:** situação de cada etapa (concluída, com erros, não executada ou não implementada) e os erros
+   léxicos e sintáticos em caixas separadas, com posição clicável, esperado, encontrado e dica.
+3. **Tokens (análise léxica):**
+   - **código classificado**, com cada trecho colorido pela categoria, erros sublinhados e comentários em itálico;
+   - **legenda** com a quantidade de tokens por categoria e a explicação de cada uma (passe o mouse);
+   - **tabela** com tipo, lexema, linha e coluna;
+   - explicação de como o scanner decide a categoria e por que continua após um erro.
+4. **AST:** visão hierárquica (expandir e recolher) e visão gráfica. Clicar em um nó destaca o token na tabela, o
+   trecho no código classificado e a posição no editor.
+
+Acessibilidade: operação completa pelo teclado, árvore em texto legível por leitores de tela, botões A−/A+ para o
+tamanho da fonte, foco visível e layout de uma coluna em telas estreitas.
+
+---
+
+## 9. Decisões de projeto
+
+- **Scanner por expressão regular mestre:** cada categoria é uma regra legível, e a ordem da tabela resolve
+  ambiguidades (palavra reservada antes de identificador, real antes de inteiro, `>=` antes de `>`).
+- **Erros léxicos acumulados:** o scanner continua após um erro para mostrar todos de uma vez.
+- **Parser descendente recursivo escrito à mão:** cada regra da gramática é um método, o que facilita a leitura e
+  permite mensagens específicas por construção.
+- **Parser não roda com erro léxico:** com tokens faltando, ele apontaria erros sintáticos que não correspondem ao
+  problema real.
+- **Parada no primeiro erro sintático**, sem recuperação, para evitar erros em cascata.
+- **Parênteses não viram nós da AST:** a forma da árvore já representa a precedência.
+- **Limites de segurança:** 5000 caracteres por análise e 100 níveis de aninhamento. A interface insere conteúdo
+  apenas como texto, nunca como HTML.
+
+---
+
+## 10. Limitações conhecidas
 
 - A análise semântica e a tabela de símbolos ainda não existem (Etapa 5).
 - O parser relata apenas o primeiro erro sintático.
-- A AST gráfica não tem zoom; árvores grandes exigem rolagem (a visão hierárquica permite recolher subárvores).
-- Não há visualização passo a passo da construção da árvore.
-- A interface foi testada apenas em Chrome (desktop e emulação de 390 px).
+- Strings não aceitam aspas escapadas (`\"`) nem aspas triplas; números não aceitam notação científica, hexadecimal ou
+  `_` como separador.
+- A AST gráfica não tem zoom; para árvores grandes, use a visão hierárquica e recolha subárvores.
+- Não há animação passo a passo da construção da árvore.
+- Interface testada no Chrome (desktop e largura de 390 px).
+
+---
+
+## 11. Documentação complementar
+
+- [`docs/casos-de-teste.md`](docs/casos-de-teste.md): casos de teste por categoria.
+- [`docs/registro_testes.md`](docs/registro_testes.md): registro das execuções.
+- [`docs/fluxograma.md`](docs/fluxograma.md): fluxograma do sistema e arquitetura.
