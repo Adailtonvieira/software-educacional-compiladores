@@ -103,6 +103,19 @@
   .detalhe dt { font-weight: bold; } .detalhe dd { margin: 0; }
   .detalhe code { white-space: pre-wrap; }
   .regra-erro { font-family: Consolas, monospace; font-size: .85rem; }
+  /* Assistente de IA */
+  .ia-botao { background: #5b2a86; font-size: .85rem; padding: 4px 10px; min-height: 32px; }
+  .ia-botao:hover { background: #45206a; }
+  .ia-status { font-size: .85rem; padding: 4px 10px; border-radius: 12px; border: 1px solid var(--borda); background: #eee; }
+  .ia-status.ok { background: var(--ok-fundo); color: var(--ok-texto); }
+  .ia-status.aviso { background: var(--aviso-fundo); color: var(--aviso-texto); }
+  .ia-resposta { margin-top: 10px; border: 1px solid #c9b3e6; border-left: 4px solid #5b2a86; border-radius: 6px; padding: 10px 12px; background: #faf7fd; }
+  .ia-rotulo { font-size: .82rem; color: #5b2a86; font-weight: bold; margin: 0 0 6px; }
+  .ia-texto { white-space: pre-wrap; margin: 6px 0 0; }
+  .ia-carregando::after { content: " ⏳"; }
+  .sugestoes { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .sugestoes button { font-size: .85rem; min-height: 32px; padding: 4px 10px; }
+  #pergunta { width: 100%; height: 70px; min-height: 60px; font-size: 1rem; padding: 8px; border: 1px solid var(--borda); border-radius: 6px; }
   /* Árvore gráfica */
   #ast-grafica { overflow: auto; max-height: 520px; border: 1px solid #eee; border-radius: 6px; }
   #ast-grafica svg text { font-family: Arial, sans-serif; font-size: 12px; }
@@ -178,8 +191,8 @@
       <div class="rolagem">
         <table id="tabela-tokens">
           <caption class="sr-only">Tokens identificados</caption>
-          <thead><tr><th scope="col">#</th><th scope="col">Tipo</th><th scope="col">Lexema</th><th scope="col">Linha</th><th scope="col">Coluna</th></tr></thead>
-          <tbody><tr><td colspan="5">Nenhuma análise realizada.</td></tr></tbody>
+          <thead><tr><th scope="col">#</th><th scope="col">Tipo</th><th scope="col">Lexema</th><th scope="col">Linha</th><th scope="col">Coluna</th><th scope="col"><span class="sr-only">Explicar com IA</span>IA</th></tr></thead>
+          <tbody><tr><td colspan="6">Nenhuma análise realizada.</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -227,6 +240,28 @@
       <div id="no-detalhe" class="detalhe oculto" aria-live="polite"></div>
     </section>
   </div>
+
+  <section class="cartao" aria-labelledby="titulo-ia" id="secao-ia">
+    <h2 id="titulo-ia">5. Professor virtual (IA — opcional)</h2>
+    <div class="controles">
+      <span class="ia-status" id="ia-status" aria-live="polite">Assistente de IA: verificando…</span>
+    </div>
+    <details class="explicacao">
+      <summary>Como funciona?</summary>
+      <p>As explicações são geradas pelo modelo <strong>Llama 3.2</strong>, executado localmente pelo <strong>Ollama</strong>.
+      A IA <strong>não</strong> faz a análise: o backend envia a ela os tokens, a AST e os erros produzidos pelo próprio
+      compilador do projeto, e ela explica esses resultados. Use os botões <em>Explicar com IA</em> no nó selecionado da
+      AST, nos erros e na tabela de tokens, ou faça uma pergunta abaixo. A IA pode errar: o resultado oficial é sempre o
+      do compilador.</p>
+    </details>
+    <label for="pergunta">Pergunte sobre compiladores ou sobre o código analisado:</label>
+    <textarea id="pergunta" maxlength="500" placeholder="Ex.: Por que a multiplicação fica abaixo da adição na árvore?"></textarea>
+    <div class="sugestoes" id="sugestoes" aria-label="Perguntas sugeridas"></div>
+    <div class="controles">
+      <button type="button" class="ia-botao" id="btnPerguntar">Perguntar ao professor virtual</button>
+    </div>
+    <div id="ia-resposta" class="ia-resposta oculto" aria-live="polite"></div>
+  </section>
 
   <footer>
     Limitações: a análise semântica (tabela de símbolos, variáveis não declaradas, tipos) será implementada na Etapa 5.
@@ -328,6 +363,7 @@
       return;
     }
     ultimaResposta = resposta;
+    ultimoCodigo = codigo;
     renderizarEtapas(resposta.etapas || {});
     renderizarMensagens(resposta);
     renderizarTokens(resposta.tokens || []);
@@ -349,13 +385,14 @@
   }
 
   // ---------- erros ----------
-  function itemErro(e) {
+  function itemErro(e, indice) {
     const pos = el("button", { type: "button", onclick: () => selecionarNoCodigo(e.linha, e.coluna, (e.lexema || "").length) },
       `Linha ${e.linha}, coluna ${e.coluna}`);
     const li = el("li", { class: "erro-item" }, pos, ": ", e.mensagem);
     if (e.esperado && e.encontrado && !e.mensagem.startsWith("Esperado")) li.append(el("br"), `Esperado: ${e.esperado}. Encontrado: ${e.encontrado}.`);
     if (e.dica) li.append(el("br"), el("span", { class: "dica" }, "Dica: " + e.dica));
     if (e.producao) li.append(el("br"), "Regra em análise: ", el("code", { class: "regra-erro" }, `${e.regra} = ${e.producao} ;`));
+    li.append(el("br"), botaoIA("Entender erro com IA", `Entender com IA o erro da linha ${e.linha}`, () => explicarErro(indice, e)));
     return li;
   }
 
@@ -374,14 +411,14 @@
     if (lex.length) {
       partes.push(el("div", { class: "caixa erro", role: "alert" },
         el("strong", {}, `Erros léxicos (${lex.length})`), " — caracteres ou trechos que não formam nenhum token válido.",
-        el("ul", { style: "padding-left:0;list-style:none;margin:0" }, ...lex.map(itemErro))));
+        el("ul", { style: "padding-left:0;list-style:none;margin:0" }, ...lex.map(e => itemErro(e, r.erros.indexOf(e))))));
       partes.push(el("div", { class: "caixa aviso" },
         "A análise sintática não foi executada: com erros léxicos a sequência de tokens fica incompleta e o parser apontaria erros que não correspondem ao problema real. Corrija os erros léxicos primeiro."));
     }
     if (sint.length) {
       partes.push(el("div", { class: "caixa erro", role: "alert" },
         el("strong", {}, "Erro sintático"), " — os tokens são válidos, mas a estrutura não segue a gramática. O parser para no primeiro erro.",
-        el("ul", { style: "padding-left:0;list-style:none;margin:0" }, ...sint.map(itemErro))));
+        el("ul", { style: "padding-left:0;list-style:none;margin:0" }, ...sint.map(e => itemErro(e, r.erros.indexOf(e))))));
     }
     m.replaceChildren(...partes);
   }
@@ -460,10 +497,11 @@
   // ---------- tokens ----------
   function renderizarTokens(tokens) {
     const tbody = document.querySelector("#tabela-tokens tbody");
-    if (!tokens.length) { tbody.replaceChildren(el("tr", {}, el("td", { colspan: "5" }, "Nenhum token."))); return; }
+    if (!tokens.length) { tbody.replaceChildren(el("tr", {}, el("td", { colspan: "6" }, "Nenhum token."))); return; }
     tbody.replaceChildren(...tokens.map((t, i) => {
       const tr = el("tr", { "data-pos": `${t.linha}:${t.coluna}` },
-        el("td", {}, i + 1), el("td", {}, t.tipo), el("td", {}, el("code", {}, t.lexema)), el("td", {}, t.linha), el("td", {}, t.coluna));
+        el("td", {}, i + 1), el("td", {}, t.tipo), el("td", {}, el("code", {}, t.lexema)), el("td", {}, t.linha), el("td", {}, t.coluna),
+        el("td", {}, botaoIA("?", `Explicar com IA o token ${t.lexema}`, () => explicarTokenIA(i, t))));
       tr.addEventListener("click", () => selecionarNoCodigo(t.linha, t.coluna, t.lexema.length));
       return tr;
     }));
@@ -515,7 +553,8 @@
       el("dt", {}, "Regra"), el("dd", {}, el("code", {}, producao(no.regra))),
       el("dt", {}, "Token"), el("dd", {}, `linha ${no.linha}, coluna ${no.coluna}`),
       el("dt", {}, "Trecho"), el("dd", {}, `de ${no.inicio.linha}:${no.inicio.coluna} até ${no.fim.linha}:${no.fim.coluna}`),
-      el("dt", {}, "Filhos"), el("dd", {}, no.filhos.length ? no.filhos.map(f => f.tipo).join(", ") : "nenhum (folha)")));
+      el("dt", {}, "Filhos"), el("dd", {}, no.filhos.length ? no.filhos.map(f => f.tipo).join(", ") : "nenhum (folha)")),
+      el("div", { class: "controles" }, botaoIA("Explicar com IA", `Explicar o nó ${no.tipo} com IA`, () => explicarNo(no))));
     d.classList.remove("oculto");
   }
 
@@ -563,6 +602,7 @@
       ordemPassos = [];
       return;
     }
+    (function marcar(no, caminho) { no._caminho = caminho; no.filhos.forEach((f, i) => marcar(f, caminho.concat(i))); })(ast, []);
     ordemPassos = posOrdem(ast);
     ordemPassos.forEach((n, i) => { n._id = i; });
     const tipos = [...new Set(ordemPassos.map(n => n.tipo))].sort();
@@ -582,7 +622,7 @@
 
   function exportarJSON() {
     if (!ultimaResposta || !ultimaResposta.ast) { mostrarAviso("Não há AST para exportar: analise um código válido primeiro."); return; }
-    const limpar = (n) => { const { _id, ...resto } = n; return { ...resto, filhos: n.filhos.map(limpar) }; };
+    const limpar = (n) => { const { _id, _caminho, ...resto } = n; return { ...resto, filhos: n.filhos.map(limpar) }; };
     const blob = new Blob([JSON.stringify(limpar(ultimaResposta.ast), null, 2)], { type: "application/json" });
     const a = el("a", { href: URL.createObjectURL(blob), download: "ast.json" });
     document.body.append(a); a.click(); a.remove();
@@ -688,6 +728,73 @@
     return svg;
   }
 
+  // ---------- assistente de IA (Ollama + Llama 3.2) ----------
+  let ultimoCodigo = "";
+  const API_IA = API.replace("/api/analisar", "/api/ia");
+  const SUGESTOES = [
+    "Qual a diferença entre scanner e parser?",
+    "O que são símbolos terminais e não terminais?",
+    "Qual a diferença entre AST e árvore de derivação?",
+    "Como a precedência dos operadores aparece na gramática?",
+    "O que é um parser descendente recursivo?",
+    "Por que a gramática não pode ter recursão à esquerda num parser descendente?"
+  ];
+
+  async function verificarIA() {
+    const el_ = $("ia-status");
+    try {
+      const r = await fetch(API_IA + "/status");
+      const d = await r.json();
+      el_.textContent = "Assistente de IA: " + (d.disponivel && d.modelo_instalado ? `pronto (${d.modelo})` : d.mensagem);
+      el_.className = "ia-status " + (d.disponivel && d.modelo_instalado ? "ok" : "aviso");
+    } catch (e) {
+      el_.textContent = "Assistente de IA: indisponível (a análise continua funcionando normalmente).";
+      el_.className = "ia-status aviso";
+    }
+  }
+
+  function botaoIA(texto, rotuloAcessivel, aoClicar) {
+    const b = el("button", { type: "button", class: "ia-botao", "aria-label": rotuloAcessivel }, texto);
+    b.addEventListener("click", (ev) => { ev.stopPropagation(); aoClicar(); });
+    return b;
+  }
+
+  async function pedirExplicacao(corpo, titulo) {
+    const caixa = $("ia-resposta");
+    caixa.classList.remove("oculto");
+    caixa.replaceChildren(el("p", { class: "ia-rotulo ia-carregando" }, `${titulo} — gerando explicação com IA…`));
+    $("secao-ia").scrollIntoView({ behavior: "smooth", block: "start" });
+    let d, r;
+    try {
+      r = await fetch(API_IA + "/explicar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      d = await r.json();
+    } catch (e) {
+      d = { erro: "Não foi possível falar com o servidor." };
+    }
+    if (!r || !r.ok) {
+      caixa.replaceChildren(el("p", { class: "ia-rotulo" }, titulo), el("div", { class: "caixa aviso" }, d.erro || "Falha ao obter a explicação."));
+      return;
+    }
+    caixa.replaceChildren(
+      el("p", { class: "ia-rotulo" }, `Explicação gerada por IA (${d.modelo}) — pode conter erros; o resultado oficial é o do compilador.`),
+      el("p", {}, el("strong", {}, "Pergunta: "), d.pergunta),
+      el("p", { class: "ia-texto" }, d.explicacao));
+  }
+
+  const explicarNo = (no) => pedirExplicacao({ tipo: "no", codigo: ultimoCodigo, caminho: no._caminho },
+    `Nó ${no.tipo}${no.valor ? " (" + no.valor + ")" : ""}`);
+  const explicarErro = (indice, e) => pedirExplicacao({ tipo: "erro", codigo: ultimoCodigo, indice },
+    `Erro na linha ${e.linha}, coluna ${e.coluna}`);
+  const explicarTokenIA = (indice, t) => pedirExplicacao({ tipo: "token", codigo: ultimoCodigo, indice },
+    `Token ${t.tipo} '${t.lexema}'`);
+
+  function perguntar(texto) {
+    const pergunta = (texto || $("pergunta").value).trim();
+    if (!pergunta) { $("pergunta").focus(); return; }
+    $("pergunta").value = pergunta;
+    pedirExplicacao({ tipo: "pergunta", pergunta, codigo: ultimoCodigo }, "Professor virtual");
+  }
+
   // ---------- controles ----------
   function alternarVisao(grafica) {
     $("ast-grafica").classList.toggle("oculto", !grafica);
@@ -731,6 +838,10 @@
   $("passoReproduzir").addEventListener("click", reproduzir);
   $("passoSair").addEventListener("click", sairPassoAPasso);
   carregarGramatica();
+  verificarIA();
+  SUGESTOES.forEach(q => $("sugestoes").append(el("button", { type: "button", class: "secundario", onclick: () => perguntar(q) }, q)));
+  $("btnPerguntar").addEventListener("click", () => perguntar());
+  $("pergunta").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); perguntar(); } });
 })();
 </script>
 </body>

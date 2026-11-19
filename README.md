@@ -28,6 +28,7 @@ explicação.
 9. [Decisões de projeto](#9-decisões-de-projeto)
 10. [Limitações conhecidas](#10-limitações-conhecidas)
 11. [Documentação complementar](#11-documentação-complementar)
+12. [Assistente de IA com Ollama (diferencial opcional)](#12-assistente-de-ia-com-ollama-diferencial-opcional)
 
 ---
 
@@ -412,3 +413,116 @@ tamanho da fonte, foco visível e layout de uma coluna em telas estreitas.
 - [`docs/casos-de-teste.md`](docs/casos-de-teste.md): casos de teste por categoria.
 - [`docs/registro_testes.md`](docs/registro_testes.md): registro das execuções.
 - [`docs/fluxograma.md`](docs/fluxograma.md): fluxograma do sistema e arquitetura.
+
+---
+
+## 12. Assistente de IA com Ollama (diferencial opcional)
+
+### O que é e qual a função
+
+O [Ollama](https://ollama.com) executa modelos de linguagem localmente e expõe uma API HTTP. O projeto usa o modelo
+**Llama 3.2** (`llama3.2`, versão de 3B parâmetros) para **explicar** os resultados do compilador. A IA **não**
+substitui o scanner nem o parser: o backend refaz a análise do código, envia ao modelo os tokens, a AST e os erros
+reais e devolve a explicação à interface. Se o Ollama estiver fora do ar, só os botões de IA são afetados; a análise
+continua funcionando.
+
+```
+ESTUDANTE → INTERFACE WEB → BACKEND ─┬─ SCANNER → PARSER → AST   (resultado oficial)
+                                     └─ OLLAMA (llama3.2)         (explicação didática)
+```
+
+### Como foi incorporado ao Docker Compose
+
+O serviço `ollama` (imagem `ollama/ollama:latest`) e o volume `ollama_data` foram acrescentados ao `compose.yaml`. O
+backend recebe as variáveis abaixo e depende do serviço `ollama`. A porta 11434 **não** é publicada no host: só o
+backend acessa o Ollama, pela rede interna do Compose.
+
+| Variável | Padrão | Função |
+|---|---|---|
+| `OLLAMA_BASE_URL` | `http://ollama:11434` | endereço do Ollama visto pelo backend |
+| `OLLAMA_MODELO` | `llama3.2` | modelo usado |
+| `OLLAMA_TIMEOUT` | `180` | tempo máximo de espera por resposta, em segundos |
+
+### Como instalar o modelo
+
+```bash
+docker compose up -d --build
+docker compose exec ollama ollama pull llama3.2      # baixa ~2 GB na primeira vez
+docker compose exec ollama ollama list               # confere se o modelo aparece
+docker compose exec ollama ollama run llama3.2       # teste rápido (Ctrl+D para sair)
+```
+
+O modelo fica salvo no volume `ollama_data` e não precisa ser baixado de novo ao recriar o contêiner. Ele precisa de
+cerca de 4 GB de RAM livre; sem GPU, cada resposta pode levar de alguns segundos a mais de um minuto, e a primeira é a
+mais lenta, porque o modelo é carregado na memória.
+
+### Como o backend faz as requisições
+
+O módulo `backend/ia.py` usa apenas a biblioteca padrão do Python (`urllib`), sem dependências novas:
+
+1. a interface envia a `POST /api/ia/explicar` o código analisado e o que foi selecionado;
+2. o backend **refaz a análise** do código (os dados vêm do compilador, não do navegador);
+3. monta a instrução de sistema (professor de Compiladores que não pode inventar tokens, nós ou erros) e uma mensagem
+   com o código, os tokens, a AST em texto, os erros, o elemento selecionado (com a regra gramatical, os ancestrais e
+   os filhos, no caso de um nó) e a gramática; esses dados vão entre as marcas `<<<DADOS>>>` e `<<<FIM_DADOS>>>`, e a
+   instrução de sistema manda tratá-los como material a explicar, nunca como ordens;
+4. chama `POST {OLLAMA_BASE_URL}/api/chat` com `stream: false` e `temperature: 0.2`;
+5. extrai `message.content` e devolve `{explicacao, modelo, pergunta, gerado_por_ia: true}`.
+
+Rotas:
+
+| Rota | Corpo | Resposta |
+|---|---|---|
+| `GET /api/ia/status` | — | `{disponivel, modelo, modelo_instalado, mensagem}` |
+| `POST /api/ia/explicar` | `{"tipo": "no", "codigo": "...", "caminho": [0, 1, 1]}` (índices dos filhos a partir da raiz) | `{explicacao, modelo, pergunta, gerado_por_ia}` |
+| | `{"tipo": "erro", "codigo": "...", "indice": 0}` (posição em `erros`) | |
+| | `{"tipo": "token", "codigo": "...", "indice": 3}` (posição em `tokens`) | |
+| | `{"tipo": "pergunta", "pergunta": "...", "codigo": "..." (opcional)}` | |
+
+Falhas tratadas: Ollama inacessível → HTTP 503 ("Assistente de IA indisponível"); modelo não instalado → 503 com o
+comando `ollama pull`; tempo esgotado → 504; resposta vazia ou inválida → 502; pedido inválido → 400 sem chamar o
+modelo.
+
+### Funcionalidades na interface
+
+- **Explicar um nó da AST:** botão *Explicar com IA* no painel do nó selecionado.
+- **Entender um erro:** botão *Entender erro com IA* em cada erro léxico ou sintático.
+- **Explicar um token:** botão *?* em cada linha da tabela de tokens.
+- **Professor virtual:** campo de perguntas com sugestões (scanner × parser, terminais e não terminais, AST × árvore
+  de derivação, precedência, parser descendente recursivo, recursão à esquerda).
+- Indicador do estado do assistente, aviso de carregamento e o rótulo *Explicação gerada por IA — pode conter erros;
+  o resultado oficial é o do compilador*.
+
+### Testes da integração
+
+- `backend/tests/test_ia.py` (roda no contêiner com os demais): o Ollama é **simulado**. Verifica que o pedido leva
+  os dados reais do compilador (nó, regra, ancestrais, tokens, diagnóstico do parser), a gramática e as marcas de
+  dados; o tratamento de indisponibilidade, tempo esgotado, modelo ausente e resposta vazia; a validação dos pedidos;
+  a rota de status; e que `/api/analisar` funciona com o Ollama fora do ar e nunca chama a IA.
+- `tests_interface/test_interface.py`: botões de IA mostram a explicação ou o aviso de indisponibilidade, sem quebrar.
+- **Manual (com o modelo real):** ver o roteiro de demonstração abaixo e registrar em `docs/registro_testes.md`.
+
+### Demonstração
+
+1. `docker compose up -d --build` e `docker compose exec ollama ollama pull llama3.2`.
+2. Em <http://localhost:8080>, escolher o exemplo **Precedência: 10 + 5 * 2** e analisar.
+3. Clicar no nó `OperacaoBinaria *` e em **Explicar com IA**.
+4. Escolher o exemplo **Falta ':' no if**, analisar e clicar em **Entender erro com IA**.
+
+Exemplo de dados enviados ao modelo para o passo 3 (trecho):
+
+```
+Nó selecionado: OperacaoBinaria (*), linha 1, coluna 20.
+Regra que reconheceu o nó: termo = fator { ( "*" | "/" ) fator } ;
+Ancestrais (da raiz até o pai): Programa > Atribuicao (=) > OperacaoBinaria (+)
+Filhos: LiteralInteiro (5), LiteralInteiro (2)
+```
+
+> Resposta obtida na demonstração: *(colar aqui a resposta do Llama 3.2 depois de rodar no seu computador)*.
+
+### Limitações
+
+- O modelo pode cometer erros conceituais; a explicação é apoio, não resultado oficial.
+- O desempenho depende da máquina; sem GPU as respostas são lentas.
+- As respostas não são transmitidas aos poucos (`stream: false`): o texto aparece só quando fica pronto.
+- O contexto enviado é limitado a 6000 caracteres; programas grandes são truncados.

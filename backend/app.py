@@ -3,6 +3,7 @@ from flask_cors import CORS
 
 from analisador import analisar_lexico, analisar_sintatico, GRAMATICA, SIMBOLO_INICIAL
 from analisador.lexico import TOKEN_TYPES, PALAVRAS_RESERVADAS
+import ia
 
 app = Flask(__name__)
 CORS(app)
@@ -96,6 +97,41 @@ def gramatica():
         "terminais": TERMINAIS,
         "categorias_lexicas": [nome for nome, _ in TOKEN_TYPES],
     }), 200
+
+
+# ---------------------------------------------------------------- assistente de IA (opcional)
+
+@app.route('/api/ia/status', methods=['GET'])
+def ia_status():
+    return jsonify(ia.status()), 200
+
+
+@app.route('/api/ia/explicar', methods=['POST'])
+def ia_explicar():
+    """Explicação didática gerada pelo Ollama a partir da análise REAL do código.
+
+    Corpo: {"tipo": "no"|"erro"|"token"|"pergunta", "codigo": "...",
+            "caminho": [índices dos filhos a partir da raiz] (tipo "no"),
+            "indice": posição na lista de erros ou de tokens (tipos "erro" e "token"),
+            "pergunta": "..." (opcional, obrigatória no tipo "pergunta")}
+    """
+    if not request.is_json:
+        return jsonify({"erro": "Formato inválido."}), 400
+    dados = request.get_json(silent=True) or {}
+    tipo = dados.get("tipo")
+    codigo = dados.get("codigo") or ""
+    if not isinstance(codigo, str) or len(codigo) > MAX_CARACTERES:
+        return jsonify({"erro": f"O código deve ser um texto de até {MAX_CARACTERES} caracteres."}), 400
+    if tipo != "pergunta" and not codigo.strip():
+        return jsonify({"erro": "Analise um código antes de pedir uma explicação."}), 400
+    try:
+        analise = analisar(codigo) if codigo.strip() else None
+        mensagens, pergunta = ia.montar_mensagens(tipo, dados.get("pergunta"), codigo, analise,
+                                                  caminho=dados.get("caminho"), indice=dados.get("indice"))
+        texto, modelo = ia.explicar(mensagens)
+    except ia.ErroIA as e:
+        return jsonify({"erro": e.mensagem}), e.status
+    return jsonify({"explicacao": texto, "modelo": modelo, "pergunta": pergunta, "gerado_por_ia": True}), 200
 
 
 if __name__ == '__main__':

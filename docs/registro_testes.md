@@ -6,6 +6,19 @@ Comando (com os contêineres rodando):
 docker compose exec -e PYTHONPATH=/app backend pytest tests/ -v
 ```
 
+## Execução de 18/11/2026 (3) — branch `ollama` (assistente de IA)
+
+| Arquivo | Testes | Resultado |
+|---|---|---|
+| `backend/tests/test_scanner.py` | 82 | aprovados |
+| `backend/tests/test_parser.py` | 59 | aprovados |
+| `backend/tests/test_api_etapa4.py` | 15 | aprovados |
+| `backend/tests/test_ia.py` | 26 | aprovados (Ollama simulado) |
+| `tests_interface/test_interface.py` | 16 | aprovados com um Ollama simulado no ar; os testes de IA e de análise também passaram com o Ollama desligado |
+
+**Pendente:** teste com o Llama 3.2 real no Docker (instalação do modelo, explicação de nó e de erro, tempo de
+resposta, volume persistente após `docker compose down` e `up`).
+
 ## Execução de 18/11/2026 (2) — requisitos completos da Etapa 4
 
 | Arquivo | Testes | Resultado |

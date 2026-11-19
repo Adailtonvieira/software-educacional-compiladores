@@ -194,3 +194,32 @@ def test_tela_estreita_sem_rolagem_horizontal(navegador):
     analisar(pg, "resultado = 10 + 5 * 2")
     assert pg.evaluate("() => document.documentElement.scrollWidth <= window.innerWidth + 1")
     pg.close()
+
+
+# ---------------------------------------------------------------- assistente de IA (opcional)
+# Estes testes passam com ou sem o Ollama: verificam que a interface mostra a
+# explicação OU um aviso de indisponibilidade, sem quebrar a análise.
+
+def _resposta_ia(pg):
+    pg.wait_for_selector("#ia-resposta:not(.oculto) .ia-rotulo:not(.ia-carregando)", timeout=200_000)
+    return pg.inner_text("#ia-resposta")
+
+
+def test_ia_explicar_no(pagina):
+    analisar(pagina, "resultado = 10 + 5 * 2")
+    pagina.click("#ast-hierarquica .no[data-tipo='OperacaoBinaria'] >> nth=1")
+    pagina.click("#no-detalhe .ia-botao")
+    texto = _resposta_ia(pagina)
+    assert "Explicação gerada por IA" in texto or "indisponível" in texto or "não está instalado" in texto
+
+
+def test_ia_entender_erro(pagina):
+    analisar(pagina, "if x > 0\n    y = 1")
+    pagina.click("#mensagens .ia-botao")
+    texto = _resposta_ia(pagina)
+    assert "Erro na linha 1, coluna 9" in texto or "Explicação gerada por IA" in texto
+
+
+def test_ia_status_e_professor_virtual_visiveis(pagina):
+    assert "Assistente de IA:" in pagina.inner_text("#ia-status")
+    assert pagina.locator("#sugestoes button").count() >= 3
