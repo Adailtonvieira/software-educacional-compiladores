@@ -521,12 +521,41 @@ modelo.
 4. Escolher o exemplo **Falta ':' no if**, analisar e clicar em **Entender erro com IA**.
 
 Exemplo de dados enviados ao modelo para o passo 3 (trecho):
+
+```
+Nó selecionado: OperacaoBinaria (*), linha 1, coluna 20.
+Regra que reconheceu o nó: termo = fator { ( "*" | "/" ) fator } ;
+Ancestrais (da raiz até o pai): Programa > Atribuicao (=) > OperacaoBinaria (+)
+Filhos: LiteralInteiro (5), LiteralInteiro (2)
+```
+
+**Respostas obtidas com o Llama 3.2 real** (Docker, sem GPU, em 23/11/2026):
+
+*Passo 3 — nó `OperacaoBinaria *` de `resultado = 10 + 5 * 2` (51 s, incluindo o carregamento do modelo), trecho:*
+
+> O nó representa uma operação binária, especificamente uma multiplicação. Ele é o filho do "OperacaoBinaria" com
+> a operação "+", que é o filho do "Atribuicao" com o identificador "resultado". A regra que reconheceu esse nó é a
+> regra `termo = fator { ( "*" | "/" ) fator } ;`. [...] O outro "fator" é o "LiteralInteiro" com o valor 2.
+
+*Passo 4 — erro de `if x > 0` sem `:` (33 s), trecho:*
+
+> **Por que o código não atende à regra:** No código-fonte, após a palavra-chave "if", não há um ponto colônico
+> ":". [...] **Como corrigir:** é necessário adicionar o ":" [...] `if x > 0:` / `y = 1`.
+
+Observação crítica: as respostas usaram corretamente os dados do compilador (posição, pai, filhos, regra e
+diagnóstico), mas tiveram erros conceituais: na primeira, o modelo chamou o próprio nó `*` de "fator"; na segunda,
+disse que o bloco do `if` é opcional e fica "entre chaves `{}`", o que não vale para Python. Isso confirma a decisão
+de rotular o texto como gerado por IA e manter o resultado do compilador como o oficial.
+
+Capturas de tela da demonstração (código usado nos prints):
+
+```python
 i = 0
 while i < 3:
     print(i)
     i = i + 1
+```
 
-> Resposta obtida na demonstração:
 <img width="1206" height="927" alt="image" src="https://github.com/user-attachments/assets/08e8e78f-5e11-4ebf-a894-951933830a07" />
 <img width="1193" height="880" alt="image" src="https://github.com/user-attachments/assets/c9c70364-18eb-4097-87f9-1d2c99c93ae4" />
 
