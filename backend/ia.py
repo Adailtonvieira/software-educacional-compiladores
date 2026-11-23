@@ -9,19 +9,28 @@ as rotas de análise continuam funcionando.
 Configuração por variáveis de ambiente:
     OLLAMA_BASE_URL  (padrão http://ollama:11434)
     OLLAMA_MODELO    (padrão llama3.2)
-    OLLAMA_TIMEOUT   (segundos, padrão 180)
+    OLLAMA_TIMEOUT   (segundos sem receber NENHUM dado do modelo, padrão 300)
+    OLLAMA_MAX_TOKENS (tamanho máximo da resposta, padrão 400)
+
+Desempenho: a resposta é recebida em modo streaming (pedaço por pedaço), então o
+tempo limite vale para a espera entre pedaços, e não para a resposta inteira. O
+contexto enviado é enxuto (só as regras relevantes da gramática) e o modelo é
+mantido carregado na memória (keep_alive) para que as perguntas seguintes sejam
+mais rápidas. A rota /api/ia/aquecer carrega o modelo antes da primeira pergunta.
 """
 
 import json
 import os
 import socket
+import threading
 import urllib.error
 import urllib.request
 
 from analisador import GRAMATICA
 
 LIMITE_PERGUNTA = 500
-LIMITE_CONTEXTO = 6000      # caracteres de contexto enviados ao modelo
+LIMITE_CONTEXTO = 3500      # caracteres de contexto enviados ao modelo (menos texto = resposta mais rápida em CPU)
+MANTER_CARREGADO = "30m"    # quanto tempo o Ollama mantém o modelo na memória após o último uso
 
 PROMPT_SISTEMA = """Você é um professor especialista em Compiladores e Linguagens Formais.
 Sua função é explicar didaticamente os resultados produzidos por um software educacional de compiladores
@@ -69,7 +78,8 @@ def configuracao():
     return {
         "url": os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434").rstrip("/"),
         "modelo": os.environ.get("OLLAMA_MODELO", "llama3.2"),
-        "timeout": float(os.environ.get("OLLAMA_TIMEOUT", "180")),
+        "timeout": float(os.environ.get("OLLAMA_TIMEOUT", "300")),
+        "max_tokens": int(os.environ.get("OLLAMA_MAX_TOKENS", "400")),
     }
 
 
@@ -111,6 +121,29 @@ def _resumo_no(no):
 
 # ---------------------------------------------------------------- montagem do pedido
 
+def _regras_relevantes(tipo, analise, caminho, indice):
+    """Só as produções ligadas ao que foi selecionado (a gramática inteira deixa o pedido lento)."""
+    if tipo == "pergunta":
+        return list(GRAMATICA)
+    nomes = []
+    if tipo == "no" and analise and analise["ast"]:
+        achado = no_por_caminho(analise["ast"], caminho or [])
+        if achado:
+            no, ancestrais = achado
+            nomes = [a["regra"] for a in ancestrais[-2:]] + [no["regra"]] + [f["regra"] for f in no["filhos"]]
+            if no["regra"] in ("aritmetica", "termo", "fator", "expressao"):
+                nomes += ["expressao", "aritmetica", "termo", "fator"]     # para explicar a precedência
+    elif tipo == "erro" and analise and isinstance(indice, int) and 0 <= indice < len(analise["erros"]):
+        regra = analise["erros"][indice].get("regra")
+        nomes = [regra] if regra else []
+    vistos = []
+    for n in nomes:
+        if n in GRAMATICA and n not in vistos:
+            vistos.append(n)
+    return vistos
+
+
+
 def montar_mensagens(tipo, pergunta, codigo, analise, caminho=None, indice=None):
     """Monta as mensagens para o Ollama a partir da análise REAL do código."""
     if tipo not in PERGUNTAS_PADRAO:
@@ -122,8 +155,9 @@ def montar_mensagens(tipo, pergunta, codigo, analise, caminho=None, indice=None)
     partes = []
     if codigo:
         partes.append("Código-fonte analisado:\n" + codigo)
-    if analise:
+    if analise and (tipo in ("token", "erro") or len(analise["tokens"]) <= 40):
         partes.append("Tokens produzidos pelo scanner:\n" + tokens_em_texto(analise["tokens"]))
+    if analise:
         partes.append(f"Situação das etapas: {json.dumps(analise['etapas'], ensure_ascii=False)}")
         if analise["ast"]:
             partes.append("AST produzida pelo parser:\n" + ast_em_texto(analise["ast"]))
@@ -163,8 +197,9 @@ def montar_mensagens(tipo, pergunta, codigo, analise, caminho=None, indice=None)
         foco = f"Token selecionado: categoria {t['tipo']}, lexema '{t['lexema']}', linha {t['linha']}, coluna {t['coluna']}."
     if foco:
         partes.append(foco)
-    if tipo in ("no", "erro") or tipo == "pergunta":
-        partes.append("Gramática (EBNF):\n" + "\n".join(f"{k} = {v} ;" for k, v in GRAMATICA.items()))
+    regras = _regras_relevantes(tipo, analise, caminho, indice)
+    if regras:
+        partes.append("Regras da gramática (EBNF) relacionadas:\n" + "\n".join(f"{k} = {GRAMATICA[k]} ;" for k in regras))
 
     contexto = "\n\n".join(partes)
     if len(contexto) > LIMITE_CONTEXTO:
@@ -178,15 +213,15 @@ def montar_mensagens(tipo, pergunta, codigo, analise, caminho=None, indice=None)
 
 # ---------------------------------------------------------------- comunicação com o Ollama
 
-def _requisitar(caminho, corpo=None, timeout=None):
+def _abrir(caminho, corpo=None, timeout=None):
+    """Abre a conexão com o Ollama e converte falhas de rede em ErroIA."""
     cfg = configuracao()
     dados = json.dumps(corpo).encode("utf-8") if corpo is not None else None
     req = urllib.request.Request(cfg["url"] + caminho, data=dados,
                                  headers={"Content-Type": "application/json"},
                                  method="POST" if corpo is not None else "GET")
     try:
-        with urllib.request.urlopen(req, timeout=timeout or cfg["timeout"]) as resp:
-            return json.loads(resp.read().decode("utf-8") or "null")
+        return urllib.request.urlopen(req, timeout=timeout or cfg["timeout"])
     except urllib.error.HTTPError as e:
         detalhe = ""
         try:
@@ -198,29 +233,98 @@ def _requisitar(caminho, corpo=None, timeout=None):
                          f"docker compose exec ollama ollama pull {cfg['modelo']}", 503)
         raise ErroIA("O assistente de IA respondeu com erro. Tente novamente.", 502)
     except (socket.timeout, TimeoutError):
-        raise ErroIA("O assistente de IA demorou demais para responder. Tente de novo; a primeira resposta "
-                     "costuma ser mais lenta enquanto o modelo é carregado.", 504)
+        raise _erro_tempo()
     except urllib.error.URLError as e:
         if isinstance(e.reason, (socket.timeout, TimeoutError)):
-            raise ErroIA("O assistente de IA demorou demais para responder.", 504)
+            raise _erro_tempo()
         raise ErroIA("Assistente de IA indisponível: o serviço Ollama não está acessível. "
                      "A análise léxica e sintática continua funcionando normalmente.", 503)
+
+
+def _erro_tempo():
+    cfg = configuracao()
+    return ErroIA(f"O assistente de IA ficou {int(cfg['timeout'])} s sem responder. O computador pode estar sem memória "
+                  "livre ou lento para o modelo; tente de novo (a primeira resposta é a mais lenta) ou aumente "
+                  "OLLAMA_TIMEOUT no compose.yaml.", 504)
+
+
+def _requisitar(caminho, corpo=None, timeout=None):
+    """Requisição simples que devolve o JSON da resposta (usada em /api/tags)."""
+    try:
+        with _abrir(caminho, corpo, timeout) as resp:
+            return json.loads(resp.read().decode("utf-8") or "null")
+    except (socket.timeout, TimeoutError):
+        raise _erro_tempo()
     except (ValueError, json.JSONDecodeError):
         raise ErroIA("O assistente de IA devolveu uma resposta inválida.", 502)
 
 
 def explicar(mensagens):
+    """Pede a explicação em modo streaming e junta os pedaços.
+
+    Com ``stream: true`` o Ollama envia uma linha JSON por pedaço de texto; o
+    tempo limite passa a valer para o intervalo entre pedaços, então respostas
+    longas em CPU não estouram o limite enquanto o modelo continua escrevendo.
+    """
     cfg = configuracao()
-    resposta = _requisitar("/api/chat", {
+    corpo = {
         "model": cfg["modelo"],
         "messages": mensagens,
-        "stream": False,
-        "options": {"temperature": 0.2},
-    })
-    texto = ((resposta or {}).get("message") or {}).get("content", "") if isinstance(resposta, dict) else ""
-    if not isinstance(texto, str) or not texto.strip():
+        "stream": True,
+        "keep_alive": MANTER_CARREGADO,
+        "options": {"temperature": 0.2, "num_predict": cfg["max_tokens"], "num_ctx": 4096},
+    }
+    partes = []
+    try:
+        with _abrir("/api/chat", corpo) as resp:
+            for linha in resp:
+                linha = linha.strip()
+                if not linha:
+                    continue
+                pedaco = json.loads(linha.decode("utf-8"))
+                if not isinstance(pedaco, dict):
+                    raise ValueError("pedaço inválido")
+                if pedaco.get("error"):
+                    raise ErroIA("O assistente de IA respondeu com erro: " + str(pedaco["error"])[:200], 502)
+                conteudo = (pedaco.get("message") or {}).get("content", "")
+                if isinstance(conteudo, str):
+                    partes.append(conteudo)
+                if pedaco.get("done"):
+                    break
+    except (socket.timeout, TimeoutError):
+        raise _erro_tempo()
+    except (ValueError, json.JSONDecodeError):
+        raise ErroIA("O assistente de IA devolveu uma resposta inválida.", 502)
+    texto = "".join(partes).strip()
+    if not texto:
         raise ErroIA("O assistente de IA devolveu uma resposta vazia. Tente novamente.", 502)
-    return texto.strip(), cfg["modelo"]
+    return texto, cfg["modelo"]
+
+
+_aquecendo = threading.Lock()
+
+
+def aquecer():
+    """Carrega o modelo na memória em segundo plano (sem bloquear a requisição).
+
+    Um pedido a /api/generate sem prompt só carrega o modelo e o mantém ativo
+    por ``MANTER_CARREGADO``. Retorna False se já houver um aquecimento em curso.
+    """
+    if not _aquecendo.acquire(blocking=False):
+        return False
+
+    def tarefa():
+        try:
+            cfg = configuracao()
+            _requisitar("/api/generate", {"model": cfg["modelo"], "keep_alive": MANTER_CARREGADO},
+                        timeout=max(cfg["timeout"], 600))
+        except ErroIA:
+            pass
+        finally:
+            _aquecendo.release()
+
+    threading.Thread(target=tarefa, daemon=True).start()
+    return True
 
 
 def status():

@@ -747,6 +747,8 @@
       const d = await r.json();
       el_.textContent = "Assistente de IA: " + (d.disponivel && d.modelo_instalado ? `pronto (${d.modelo})` : d.mensagem);
       el_.className = "ia-status " + (d.disponivel && d.modelo_instalado ? "ok" : "aviso");
+      // carrega o modelo na memória antes da primeira pergunta (a 1ª resposta é a mais lenta)
+      if (d.disponivel && d.modelo_instalado) fetch(API_IA + "/aquecer", { method: "POST" }).catch(() => {});
     } catch (e) {
       el_.textContent = "Assistente de IA: indisponível (a análise continua funcionando normalmente).";
       el_.className = "ia-status aviso";
@@ -762,7 +764,7 @@
   async function pedirExplicacao(corpo, titulo) {
     const caixa = $("ia-resposta");
     caixa.classList.remove("oculto");
-    caixa.replaceChildren(el("p", { class: "ia-rotulo ia-carregando" }, `${titulo} — gerando explicação com IA…`));
+    caixa.replaceChildren(el("p", { class: "ia-rotulo ia-carregando" }, `${titulo} — gerando explicação com IA… (sem placa de vídeo, pode levar de 30 s a alguns minutos)`));
     $("secao-ia").scrollIntoView({ behavior: "smooth", block: "start" });
     let d, r;
     try {

@@ -441,7 +441,8 @@ backend acessa o Ollama, pela rede interna do Compose.
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | endereço do Ollama visto pelo backend |
 | `OLLAMA_MODELO` | `llama3.2` | modelo usado |
-| `OLLAMA_TIMEOUT` | `180` | tempo máximo de espera por resposta, em segundos |
+| `OLLAMA_TIMEOUT` | `300` | segundos sem receber **nenhum** pedaço da resposta antes de desistir |
+| `OLLAMA_MAX_TOKENS` | `400` | tamanho máximo da resposta (respostas menores saem mais rápido) |
 
 ### Como instalar o modelo
 
@@ -466,14 +467,22 @@ O módulo `backend/ia.py` usa apenas a biblioteca padrão do Python (`urllib`), 
    com o código, os tokens, a AST em texto, os erros, o elemento selecionado (com a regra gramatical, os ancestrais e
    os filhos, no caso de um nó) e a gramática; esses dados vão entre as marcas `<<<DADOS>>>` e `<<<FIM_DADOS>>>`, e a
    instrução de sistema manda tratá-los como material a explicar, nunca como ordens;
-4. chama `POST {OLLAMA_BASE_URL}/api/chat` com `stream: false` e `temperature: 0.2`;
-5. extrai `message.content` e devolve `{explicacao, modelo, pergunta, gerado_por_ia: true}`.
+4. chama `POST {OLLAMA_BASE_URL}/api/chat` em modo **streaming** (`stream: true`), com `temperature: 0.2`,
+   `num_predict` limitado e `keep_alive: 30m`; o tempo limite vale para a espera entre pedaços, não para a resposta
+   inteira, então respostas lentas em CPU não são cortadas enquanto o modelo continua escrevendo;
+5. junta os pedaços de `message.content` e devolve `{explicacao, modelo, pergunta, gerado_por_ia: true}`.
+
+Para ficar mais rápido em máquinas sem GPU: o contexto enviado leva só as regras da gramática ligadas ao elemento
+selecionado (a gramática inteira vai apenas nas perguntas livres), a resposta é limitada a 400 tokens, o modelo fica
+carregado na memória por 30 minutos após o último uso e a interface pede `POST /api/ia/aquecer` ao abrir, para
+carregar o modelo antes da primeira pergunta.
 
 Rotas:
 
 | Rota | Corpo | Resposta |
 |---|---|---|
 | `GET /api/ia/status` | — | `{disponivel, modelo, modelo_instalado, mensagem}` |
+| `POST /api/ia/aquecer` | — | HTTP 202 `{iniciado}`; carrega o modelo em segundo plano |
 | `POST /api/ia/explicar` | `{"tipo": "no", "codigo": "...", "caminho": [0, 1, 1]}` (índices dos filhos a partir da raiz) | `{explicacao, modelo, pergunta, gerado_por_ia}` |
 | | `{"tipo": "erro", "codigo": "...", "indice": 0}` (posição em `erros`) | |
 | | `{"tipo": "token", "codigo": "...", "indice": 3}` (posição em `tokens`) | |
@@ -524,5 +533,5 @@ Filhos: LiteralInteiro (5), LiteralInteiro (2)
 
 - O modelo pode cometer erros conceituais; a explicação é apoio, não resultado oficial.
 - O desempenho depende da máquina; sem GPU as respostas são lentas.
-- As respostas não são transmitidas aos poucos (`stream: false`): o texto aparece só quando fica pronto.
-- O contexto enviado é limitado a 6000 caracteres; programas grandes são truncados.
+- O backend recebe a resposta aos poucos, mas a interface mostra o texto só quando ele fica pronto.
+- O contexto enviado é limitado a 3500 caracteres; programas grandes são truncados.

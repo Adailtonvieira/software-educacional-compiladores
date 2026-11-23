@@ -36,7 +36,12 @@ def ollama(monkeypatch):
     """Ollama falso. Configure ``ollama.resposta`` ou ``ollama.excecao``."""
     class Falso:
         pedidos = []
-        resposta = {"message": {"role": "assistant", "content": "Explicação de teste."}}
+        # /api/chat responde em streaming: uma linha JSON por pedaço
+        pedacos = [{"message": {"content": "Explicação "}, "done": False},
+                   {"message": {"content": "de teste."}, "done": False},
+                   {"message": {"content": ""}, "done": True}]
+        resposta = None            # usado nas demais rotas (ex.: /api/tags)
+        bruto = None               # corpo literal, para simular lixo
         excecao = None
 
         def __call__(self, req, timeout=None):
@@ -44,6 +49,10 @@ def ollama(monkeypatch):
             self.pedidos.append({"url": req.full_url, "corpo": corpo, "timeout": timeout})
             if self.excecao:
                 raise self.excecao
+            if self.bruto is not None:
+                return RespostaFalsa(self.bruto)
+            if req.full_url.endswith("/api/chat"):
+                return RespostaFalsa("\n".join(json.dumps(p) for p in self.pedacos).encode())
             return RespostaFalsa(json.dumps(self.resposta).encode())
 
     falso = Falso()
@@ -68,7 +77,9 @@ def test_explicar_no_envia_dados_reais_do_compilador(cliente, ollama):
 
     pedido = ollama.pedidos[0]
     assert pedido["url"] == "http://ollama-teste:11434/api/chat"
-    assert pedido["corpo"]["model"] == "llama3.2" and pedido["corpo"]["stream"] is False
+    assert pedido["corpo"]["model"] == "llama3.2" and pedido["corpo"]["stream"] is True
+    assert pedido["corpo"]["keep_alive"] == "30m"
+    assert pedido["corpo"]["options"]["num_predict"] == 400
     sistema, usuario = pedido["corpo"]["messages"]
     assert sistema["role"] == "system" and "Não invente tokens" in sistema["content"]
     texto = usuario["content"]
@@ -101,6 +112,27 @@ def test_professor_virtual_sem_codigo(cliente, ollama):
     assert "programa = { comando }" in texto                           # usa a gramática do projeto
 
 
+def test_no_envia_so_regras_relevantes(cliente, ollama):
+    pedir(cliente, tipo="no", codigo="resultado = 10 + 5 * 2", caminho=[0, 1, 1])
+    texto = ollama.pedidos[0]["corpo"]["messages"][1]["content"]
+    assert "termo = fator" in texto and "aritmetica = termo" in texto
+    assert "enquanto =" not in texto and "funcao =" not in texto          # contexto enxuto
+
+
+def test_erro_envia_so_a_regra_do_erro(cliente, ollama):
+    pedir(cliente, tipo="erro", codigo="if x > 0\n    y = 1", indice=0)
+    texto = ollama.pedidos[0]["corpo"]["messages"][1]["content"]
+    assert "Regras da gramática (EBNF) relacionadas:\nse =" in texto
+    assert "enquanto =" not in texto
+
+
+def test_contexto_limitado(cliente, ollama):
+    codigo = "\n".join(f"variavel_{i} = {i} + {i} * 2" for i in range(150))
+    pedir(cliente, tipo="pergunta", pergunta="Resuma o programa.", codigo=codigo)
+    texto = ollama.pedidos[0]["corpo"]["messages"][1]["content"]
+    assert "[contexto truncado por tamanho]" in texto and len(texto) < 4200
+
+
 def test_pergunta_padrao_quando_nao_informada(cliente, ollama):
     pedir(cliente, tipo="no", codigo="x = 1", caminho=[0])
     assert "Explique este nó da AST" in ollama.pedidos[0]["corpo"]["messages"][1]["content"]
@@ -126,7 +158,7 @@ def test_ollama_indisponivel_retorna_503(cliente, ollama):
 def test_tempo_esgotado_retorna_504(cliente, ollama):
     ollama.excecao = socket.timeout("timed out")
     r = pedir(cliente, tipo="no", codigo="x = 1", caminho=[0])
-    assert r.status_code == 504 and "demorou" in r.get_json()["erro"]
+    assert r.status_code == 504 and "sem responder" in r.get_json()["erro"]
 
 
 def test_modelo_nao_instalado_orienta_o_pull(cliente, ollama):
@@ -136,11 +168,51 @@ def test_modelo_nao_instalado_orienta_o_pull(cliente, ollama):
     assert r.status_code == 503 and "ollama pull llama3.2" in r.get_json()["erro"]
 
 
-@pytest.mark.parametrize("resposta", [{}, {"message": {}}, {"message": {"content": "   "}}, []])
-def test_resposta_vazia_ou_invalida_retorna_502(cliente, ollama, resposta):
-    ollama.resposta = resposta
+@pytest.mark.parametrize("pedacos", [
+    [{"done": True}],
+    [{"message": {}}, {"done": True}],
+    [{"message": {"content": "   "}, "done": True}],
+    [[1, 2]],
+    [{"error": "falha no modelo"}],
+])
+def test_resposta_vazia_ou_invalida_retorna_502(cliente, ollama, pedacos):
+    ollama.pedacos = pedacos
     r = pedir(cliente, tipo="no", codigo="x = 1", caminho=[0])
     assert r.status_code == 502
+
+
+def test_linha_que_nao_e_json_retorna_502(cliente, ollama):
+    ollama.bruto = b"isto nao e json"
+    assert pedir(cliente, tipo="no", codigo="x = 1", caminho=[0]).status_code == 502
+
+
+def test_streaming_junta_os_pedacos(cliente, ollama):
+    ollama.pedacos = [{"message": {"content": c}} for c in ["A ", "multi", "plicação ", "vem antes."]] + [{"done": True}]
+    d = pedir(cliente, tipo="no", codigo="x = 1", caminho=[0]).get_json()
+    assert d["explicacao"] == "A multiplicação vem antes."
+
+
+def test_tempo_esgotado_no_meio_do_streaming_retorna_504(cliente, ollama, monkeypatch):
+    class Lenta(RespostaFalsa):
+        def __iter__(self):
+            yield b'{"message": {"content": "Come"}}\n'
+            raise socket.timeout("timed out")
+    monkeypatch.setattr(ia.urllib.request, "urlopen", lambda req, timeout=None: Lenta(b""))
+    r = pedir(cliente, tipo="no", codigo="x = 1", caminho=[0])
+    assert r.status_code == 504 and "OLLAMA_TIMEOUT" in r.get_json()["erro"]
+
+
+def test_aquecer_carrega_o_modelo_em_segundo_plano(cliente, ollama):
+    import time
+    r = cliente.post("/api/ia/aquecer")
+    assert r.status_code == 202
+    for _ in range(50):
+        if ollama.pedidos:
+            break
+        time.sleep(0.02)
+    pedido = ollama.pedidos[0]
+    assert pedido["url"].endswith("/api/generate")
+    assert pedido["corpo"] == {"model": "llama3.2", "keep_alive": "30m"}
 
 
 def test_timeout_configurado_e_enviado(cliente, ollama, monkeypatch):

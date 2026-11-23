@@ -106,6 +106,12 @@ def ia_status():
     return jsonify(ia.status()), 200
 
 
+@app.route('/api/ia/aquecer', methods=['POST'])
+def ia_aquecer():
+    """Carrega o modelo na memória antes da primeira pergunta (em segundo plano)."""
+    return jsonify({"iniciado": ia.aquecer()}), 202
+
+
 @app.route('/api/ia/explicar', methods=['POST'])
 def ia_explicar():
     """Explicação didática gerada pelo Ollama a partir da análise REAL do código.
