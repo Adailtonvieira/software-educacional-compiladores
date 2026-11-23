@@ -236,6 +236,14 @@
       </div>
       <p class="caixa aviso oculto" id="passo-texto" aria-live="polite"></p>
       <div id="ast-hierarquica" class="rolagem"><p>Nenhuma árvore gerada.</p></div>
+      <div class="controles oculto" id="zoom-controles" aria-label="Zoom da árvore gráfica">
+        <button type="button" class="secundario" id="zoomMenos" aria-label="Diminuir a árvore">−</button>
+        <span id="zoomValor" aria-live="polite" style="min-width:3.5em;text-align:center">100%</span>
+        <button type="button" class="secundario" id="zoomMais" aria-label="Aumentar a árvore">+</button>
+        <button type="button" class="secundario" id="zoomAjustar">Ajustar à tela</button>
+        <button type="button" class="secundario" id="zoomReal">100%</button>
+        <span class="contador">Dica: Ctrl + roda do mouse sobre a árvore também muda o zoom.</span>
+      </div>
       <div id="ast-grafica" class="oculto"></div>
       <div id="no-detalhe" class="detalhe oculto" aria-live="polite"></div>
     </section>
@@ -609,6 +617,8 @@
     tipos.forEach(t => filtro.append(el("option", { value: t }, `${t} (${ordemPassos.filter(n => n.tipo === t).length})`)));
     h.replaceChildren(el("ul", { class: "arvore", "aria-label": "Árvore sintática abstrata" }, noHierarquico(ast)));
     g.replaceChildren(arvoreSVG(ast));
+    zoomAutomatico = true;
+    if (!g.classList.contains("oculto")) ajustarATela(); else aplicarZoom(1);
   }
 
   function aplicarFiltro() {
@@ -696,8 +706,9 @@
     })(raiz, 0);
     const ns = "http://www.w3.org/2000/svg";
     const mk = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
-    const svg = mk("svg", { width: Math.max(proxX, LARG) + 20, height: (maxProf + 1) * (ALT + GAP_Y), role: "img",
-      "aria-label": "Representação gráfica da AST" });
+    const larguraBase = Math.max(proxX, LARG) + 20, alturaBase = (maxProf + 1) * (ALT + GAP_Y);
+    const svg = mk("svg", { width: larguraBase, height: alturaBase, viewBox: `0 0 ${larguraBase} ${alturaBase}`,
+      role: "img", "aria-label": "Representação gráfica da AST", "data-largura": larguraBase, "data-altura": alturaBase });
     const y = (p) => 10 + p * (ALT + GAP_Y);
     for (const it of nos) for (const f of (it.filhos || [])) {
       svg.append(mk("line", { x1: 10 + it.x + LARG / 2, y1: y(it.prof) + ALT, x2: 10 + f.x + LARG / 2, y2: y(f.prof),
@@ -797,10 +808,34 @@
     pedirExplicacao({ tipo: "pergunta", pergunta, codigo: ultimoCodigo }, "Professor virtual");
   }
 
+  // ---------- zoom da árvore gráfica ----------
+  let zoom = 1, zoomAutomatico = true;
+  const ZOOM_MIN = 0.2, ZOOM_MAX = 3;
+
+  function aplicarZoom(novo) {
+    const svg = document.querySelector("#ast-grafica svg");
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, novo));
+    $("zoomValor").textContent = Math.round(zoom * 100) + "%";
+    if (!svg) return;
+    svg.setAttribute("width", Math.round(svg.dataset.largura * zoom));
+    svg.setAttribute("height", Math.round(svg.dataset.altura * zoom));
+  }
+
+  // escala para a árvore inteira caber na largura (e na altura máxima) do quadro
+  function ajustarATela() {
+    const svg = document.querySelector("#ast-grafica svg");
+    const quadro = $("ast-grafica");
+    if (!svg || quadro.classList.contains("oculto")) return;
+    const largura = quadro.clientWidth - 4, altura = 520 - 4;
+    aplicarZoom(Math.min(1, largura / svg.dataset.largura, altura / svg.dataset.altura));
+  }
+
   // ---------- controles ----------
   function alternarVisao(grafica) {
     $("ast-grafica").classList.toggle("oculto", !grafica);
+    $("zoom-controles").classList.toggle("oculto", !grafica);
     $("ast-hierarquica").classList.toggle("oculto", grafica);
+    if (grafica) { zoomAutomatico ? ajustarATela() : aplicarZoom(zoom); }
     $("verGrafica").setAttribute("aria-pressed", String(grafica));
     $("verHierarquica").setAttribute("aria-pressed", String(!grafica));
   }
@@ -833,6 +868,17 @@
   $("fonteMenor").addEventListener("click", () => mudarFonte(-2));
   $("fonteMaior").addEventListener("click", () => mudarFonte(2));
   $("filtroTipo").addEventListener("change", aplicarFiltro);
+  $("zoomMenos").addEventListener("click", () => { zoomAutomatico = false; aplicarZoom(zoom / 1.25); });
+  $("zoomMais").addEventListener("click", () => { zoomAutomatico = false; aplicarZoom(zoom * 1.25); });
+  $("zoomAjustar").addEventListener("click", () => { zoomAutomatico = true; ajustarATela(); });
+  $("zoomReal").addEventListener("click", () => { zoomAutomatico = false; aplicarZoom(1); });
+  $("ast-grafica").addEventListener("wheel", (ev) => {
+    if (!ev.ctrlKey) return;            // rolagem normal continua funcionando
+    ev.preventDefault();
+    zoomAutomatico = false;
+    aplicarZoom(zoom * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
+  }, { passive: false });
+  window.addEventListener("resize", () => { if (zoomAutomatico) ajustarATela(); });
   $("exportar").addEventListener("click", exportarJSON);
   $("passoIniciar").addEventListener("click", iniciarPassoAPasso);
   $("passoAnterior").addEventListener("click", () => mostrarPasso(passo - 1));

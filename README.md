@@ -362,7 +362,8 @@ A Etapa 4 **acrescentou** `ast`, `etapas`, `lexico` e `sintatico`; os campos da 
    - **tabela** com tipo, lexema, linha e coluna;
    - explicação de como o scanner decide a categoria e por que continua após um erro.
 4. **AST:**
-   - visão hierárquica (expandir e recolher tudo) e visão gráfica;
+   - visão hierárquica (expandir e recolher tudo) e visão gráfica com **zoom** (−, +, 100%, *Ajustar à tela* e
+     Ctrl + roda do mouse); ao abrir, a árvore gráfica é ajustada para caber inteira no quadro;
    - cada nó tem cor **e** selo com letra e, na visão gráfica, forma própria: comando (C, retângulo), expressão
      (X, elipse), folha (F, pílula), estrutura (E, tracejado);
    - clicar em um nó mostra a **regra gramatical** que o reconheceu, seleciona o **trecho completo** no editor e
@@ -401,7 +402,8 @@ tamanho da fonte, foco visível e layout de uma coluna em telas estreitas.
 - O parser relata apenas o primeiro erro sintático.
 - Strings não aceitam aspas escapadas (`\"`) nem aspas triplas; números não aceitam notação científica, hexadecimal ou
   `_` como separador.
-- A AST gráfica não tem zoom; para árvores grandes, use a visão hierárquica e recolha subárvores.
+- Em árvores muito grandes, o ajuste à tela deixa o texto pequeno; nesse caso use o zoom com rolagem ou a visão
+  hierárquica com subárvores recolhidas.
 - O passo a passo mostra a ordem de conclusão dos nós, não a derivação completa com as regras intermediárias.
 - Interface testada no Chrome (desktop e largura de 390 px).
 

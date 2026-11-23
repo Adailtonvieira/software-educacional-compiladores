@@ -223,3 +223,20 @@ def test_ia_entender_erro(pagina):
 def test_ia_status_e_professor_virtual_visiveis(pagina):
     assert "Assistente de IA:" in pagina.inner_text("#ia-status")
     assert pagina.locator("#sugestoes button").count() >= 3
+
+
+def test_zoom_da_arvore_grafica(pagina):
+    analisar(pagina, "def dobro(n):\n    return n * 2\ntotal = 0\ni = 1\nwhile i <= 3:\n    total = total + dobro(i)\n    i = i + 1")
+    pagina.click("#verGrafica")
+    largura = lambda: float(pagina.get_attribute("#ast-grafica svg", "width"))
+    quadro = pagina.evaluate("() => document.getElementById('ast-grafica').clientWidth")
+    assert largura() <= quadro                       # "Ajustar à tela" é o padrão: a árvore inteira cabe
+    pagina.click("#zoomReal")
+    assert pagina.inner_text("#zoomValor") == "100%"
+    l100 = largura()
+    pagina.click("#zoomMenos")
+    assert largura() < l100 and pagina.inner_text("#zoomValor") == "80%"
+    pagina.click("#zoomMais"); pagina.click("#zoomMais")
+    assert largura() > l100
+    pagina.click("#zoomAjustar")
+    assert largura() <= quadro
