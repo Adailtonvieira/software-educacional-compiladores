@@ -418,7 +418,7 @@ tamanho da fonte, foco visível e layout de uma coluna em telas estreitas.
 
 ---
 
-## 12. Assistente de IA com Ollama (diferencial opcional)
+## 12. Assistente de IA com Ollama
 
 ### O que é e qual a função
 
@@ -521,15 +521,15 @@ modelo.
 4. Escolher o exemplo **Falta ':' no if**, analisar e clicar em **Entender erro com IA**.
 
 Exemplo de dados enviados ao modelo para o passo 3 (trecho):
+i = 0
+while i < 3:
+    print(i)
+    i = i + 1
 
-```
-Nó selecionado: OperacaoBinaria (*), linha 1, coluna 20.
-Regra que reconheceu o nó: termo = fator { ( "*" | "/" ) fator } ;
-Ancestrais (da raiz até o pai): Programa > Atribuicao (=) > OperacaoBinaria (+)
-Filhos: LiteralInteiro (5), LiteralInteiro (2)
-```
+> Resposta obtida na demonstração:
+<img width="1206" height="927" alt="image" src="https://github.com/user-attachments/assets/08e8e78f-5e11-4ebf-a894-951933830a07" />
+<img width="1193" height="880" alt="image" src="https://github.com/user-attachments/assets/c9c70364-18eb-4097-87f9-1d2c99c93ae4" />
 
-> Resposta obtida na demonstração: *(colar aqui a resposta do Llama 3.2 depois de rodar no seu computador)*.
 
 ### Limitações
 
